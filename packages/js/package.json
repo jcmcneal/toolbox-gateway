@@ -1,6 +1,6 @@
 {
   "name": "toolbox-gateway",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Single-tool gateway pattern for LLM agents — discover, inspect, and execute tools on demand",
   "license": "MIT",
   "author": "Jason McNeal",
