@@ -142,7 +142,7 @@ export class Toolbox {
     this.tools = new Map(tools.map((t) => [t.name, t]));
     this.hintStore = opts?.hintStore ?? new MemoryHintStore();
     this.mcpRegistry = opts?.mcpRegistry ?? null;
-    this.schemaFormat = opts?.schemaFormat ?? 'json';
+    this.schemaFormat = opts?.schemaFormat ?? 'markdown';
   }
 
   getToolDefinition(): Record<string, unknown> {

@@ -88,7 +88,7 @@ class Toolbox:
         tools: list[Tool],
         hint_store: Optional[HintStore] = None,
         mcp_registry: Optional[MCPRegistry] = None,
-        schema_format: str = "json",  # "json" (default) or "markdown" (opt-in, uses schema module)
+        schema_format: str = "markdown",  # "markdown" (default) or "json" (raw JSON Schema)
     ):
         self._tools: dict[str, Tool] = {t.name: t for t in tools}
         self._hint_store = hint_store or MemoryHintStore()

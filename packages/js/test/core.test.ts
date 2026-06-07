@@ -76,8 +76,8 @@ describe('toolbox explain', () => {
     const data = result.data as Record<string, unknown>;
     const exps = data.explanations as Record<string, Record<string, unknown>>;
     expect(exps.tool_a.description).toBeTruthy();
-    expect(exps.tool_a.schema).toBeDefined();
-    expect(exps.tool_b.schema).toBeDefined();
+    expect(exps.tool_a.markdown).toBeTruthy();
+    expect(exps.tool_b.markdown).toBeTruthy();
   });
 
   it('reports not_found for missing tools', async () => {

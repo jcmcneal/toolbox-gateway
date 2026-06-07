@@ -10,7 +10,7 @@
       "explanations": {
         "<tool_name>": {
           "description": "<string>",
-          "schema": "<object>"
+          "markdown": "<string>"
         }
       }
     }
@@ -23,7 +23,7 @@
       "assertions": {
         "success": true,
         "data.explanations.tool_a.description": "non-empty string",
-        "data.explanations.tool_a.schema.properties": "object with typed fields"
+        "data.explanations.tool_a.markdown": "non-empty string with tool info"
       }
     },
     {

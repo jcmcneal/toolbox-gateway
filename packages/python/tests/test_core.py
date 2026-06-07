@@ -111,7 +111,8 @@ class TestExplainCommand:
         assert result.success
         assert "tool_0" in result.data["explanations"]
         assert "tool_2" in result.data["explanations"]
-        assert result.data["explanations"]["tool_0"]["schema"]["properties"]["input"]["type"] == "string"
+        assert result.data["explanations"]["tool_0"]["markdown"]  # non-empty string
+        assert "tool_0" in result.data["explanations"]["tool_0"]["markdown"]
 
     def test_explain_reports_not_found(self):
         tb = make_toolbox(2)
