@@ -436,3 +436,36 @@ class Toolbox:
 
         else:
             return ToolResult(success=False, error=f"Unknown hints method: {method}")
+
+
+# ── Gateway introspection ─────────────────────────────────────────
+# Helpers for host applications (display layers, tool dispatchers)
+# to detect when a tool call is a toolbox ``run`` that targets
+# another tool, and unwrap it to the inner tool's identity.
+
+
+GATEWAY_TOOL_NAME = "toolbox"
+
+
+def is_gateway_call(tool_name: str, args: dict | None) -> bool:
+    """Return True if this tool call is a toolbox ``run`` targeting an inner tool.
+
+    A gateway call has shape ``{command: "run", toolName: "X", args: {...}}``.
+    Other toolbox commands (list, explain, hints) are NOT gateway calls —
+    they should be displayed and dispatched as toolbox itself.
+    """
+    if tool_name != GATEWAY_TOOL_NAME or not args:
+        return False
+    return args.get("command") == "run" and bool(args.get("toolName"))
+
+
+def unwrap_gateway_call(tool_name: str, args: dict) -> tuple[str, dict]:
+    """If this is a gateway ``run`` call, return (inner_tool_name, inner_args).
+
+    Otherwise return (tool_name, args) unchanged. Convenience for display
+    and dispatch layers that want to delegate rendering/execution to the
+    inner tool.
+    """
+    if is_gateway_call(tool_name, args):
+        return args["toolName"], args.get("args") or {}
+    return tool_name, args
