@@ -2,7 +2,7 @@
 
 Single-tool gateway pattern for LLM agents. Instead of bloating your system prompt with dozens of tool schemas, expose **one** tool — `toolbox` — and let the agent discover, inspect, and execute tools on demand.
 
-Available as both a Python package (`pip install ai-toolset`) and a JavaScript package (`npm install ai-toolset`).
+Available as both a Python package (`pip install toolbox-gateway`) and a JavaScript package (`npm install toolbox-gateway`).
 
 ## The Pattern
 
@@ -23,8 +23,8 @@ The toolbox collapses all tools into a single CLI-style interface:
 
 | Package | Registry | Directory | Status |
 |---------|----------|-----------|--------|
-| `ai-toolset` | [PyPI](https://pypi.org/project/ai-toolset/) | `packages/python/` | ✅ 73 tests |
-| `ai-toolset` | [npm](https://npmjs.com/package/ai-toolset) | `packages/js/` | ✅ feature-complete |
+| `toolbox-gateway` | [PyPI](https://pypi.org/project/toolbox-gateway/) | `packages/python/` | ✅ 73 tests |
+| `toolbox-gateway` | [npm](https://npmjs.com/package/toolbox-gateway) | `packages/js/` | ✅ feature-complete |
 
 Both packages share the same protocol semantics. See `fixtures/` for the shared contract test fixtures that validate both implementations against a single specification.
 
@@ -33,7 +33,7 @@ Both packages share the same protocol semantics. See `fixtures/` for the shared 
 ### Python
 
 ```bash
-pip install ai-toolset
+pip install toolbox-gateway
 ```
 
 ```python
@@ -56,11 +56,11 @@ tb.handle(command="run", toolName="greet", subject="Saying hello", args={"name":
 ### JavaScript
 
 ```bash
-npm install ai-toolset
+npm install toolbox-gateway
 ```
 
 ```js
-import { Toolbox, MemoryHintStore, SQLiteHintStore, schemaToCsv } from 'ai-toolset';
+import { Toolbox, MemoryHintStore, SQLiteHintStore, schemaToCsv } from 'toolbox-gateway';
 
 // In-memory hint store (no deps)
 const tb = new Toolbox([/* tools */], new MemoryHintStore());

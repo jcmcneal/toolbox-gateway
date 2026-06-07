@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ai-toolset"
+name = "toolbox-gateway"
 version = "0.1.0"
 description = "Single-tool gateway pattern for LLM agents — discover, inspect, and execute tools on demand"
 readme = "README.md"

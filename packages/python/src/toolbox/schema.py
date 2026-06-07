@@ -1,6 +1,6 @@
 """Schema formatting — convert JSON Schemas to compact LLM-friendly formats.
 
-Opt-in: ``pip install ai-toolset[schema]``
+Opt-in: ``pip install toolbox-gateway[schema]``
 
 This module provides two key utilities:
 

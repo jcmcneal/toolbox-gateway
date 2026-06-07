@@ -6,7 +6,7 @@
  *
  * Usage::
  *
- *     import { SQLiteHintStore } from 'ai-toolset';
+ *     import { SQLiteHintStore } from 'toolbox-gateway';
  *     const store = new SQLiteHintStore();                          // .toolbox/hints.db
  *     const store = new SQLiteHintStore({ path: 'data/my_hints.db' });  // custom path
  */

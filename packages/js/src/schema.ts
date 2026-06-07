@@ -1,7 +1,7 @@
 /**
  * Schema formatting — convert JSON Schemas to compact LLM-friendly formats.
  *
- * Opt-in: ``npm install ai-toolset`` includes these utilities.
+ * Opt-in: ``npm install toolbox-gateway`` includes these utilities.
  *
  * This module provides two key utilities:
  *
