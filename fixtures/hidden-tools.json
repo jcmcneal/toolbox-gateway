@@ -1,0 +1,23 @@
+{
+  "$description": "Contract: hidden tools cannot be discovered via list but can still be executed via run",
+  "test_cases": [
+    {
+      "name": "hidden tools are excluded from list",
+      "setup": ["toolbox should have public_tool and hidden_tool(isHidden=true)"],
+      "assertions": {
+        "list.data.tools[].name": "includes public_tool",
+        "list.data.tools[].name": "excludes hidden_tool",
+        "list.data.count": 1
+      }
+    },
+    {
+      "name": "hidden tools CAN still be executed via run",
+      "setup": ["toolbox has hidden_exec_tool(isHidden=true)"],
+      "request": {"command": "run", "toolName": "hidden_exec_tool", "subject": "Testing hidden execution"},
+      "assertions": {
+        "success": true,
+        "data.source": "native"
+      }
+    }
+  ]
+}

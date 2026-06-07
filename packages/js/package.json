@@ -1,0 +1,60 @@
+{
+  "name": "ai-toolset",
+  "version": "0.1.0",
+  "description": "Single-tool gateway pattern for LLM agents — discover, inspect, and execute tools on demand",
+  "license": "MIT",
+  "author": "Jason McNeal",
+  "type": "module",
+  "keywords": ["llm", "ai", "agent", "tools", "mcp", "token-optimization", "toolbox"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js",
+      "require": "./dist/mcp.cjs"
+    },
+    "./sqlite-store": {
+      "types": "./dist/sqlite-store.d.ts",
+      "import": "./dist/sqlite-store.js",
+      "require": "./dist/sqlite-store.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.esm.json && node build-cjs.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6",
+    "esbuild": "^0.21",
+    "typescript": "^5.5",
+    "vitest": "^1.6",
+    "zod": "^3.23"
+  },
+  "peerDependencies": {
+    "zod": "^3.23"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": false
+    },
+    "better-sqlite3": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.4"
+  }
+}

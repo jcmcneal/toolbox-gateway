@@ -1,0 +1,35 @@
+# ── Python ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.db
+.idea/
+.vscode/
+
+# ── JavaScript ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+*.d.ts
+*.js.map
+*.tsbuildinfo
+.next/
+coverage/
+.yalc/
+yalc.lock
+
+# ── OS / Editor ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

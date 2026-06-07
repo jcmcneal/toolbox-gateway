@@ -1,0 +1,105 @@
+{
+  "$description": "Expected response shape for toolbox hints command (CRUD)",
+  "methods": {
+    "READ": {
+      "request": {"method": "READ"},
+      "response": {
+        "success": true,
+        "data": {
+          "hints": ["<array of Hint objects>"],
+          "count": "<number>"
+        }
+      },
+      "filters": ["category", "key", "id"]
+    },
+    "CREATE": {
+      "request": {
+        "method": "CREATE",
+        "category": "<enum: tool|mcp-server|mcp-tool|general>",
+        "key": "<string>",
+        "hint": "<string>"
+      },
+      "response": {
+        "success": true,
+        "data": {
+          "hint": {
+            "id": "<uuid string>",
+            "category": "<string>",
+            "key": "<string>",
+            "hint": "<string>",
+            "created_at": "<ISO8601 string>",
+            "updated_at": "<ISO8601 string>"
+          }
+        }
+      }
+    },
+    "UPDATE": {
+      "request": {
+        "method": "UPDATE",
+        "id": "<string>",
+        "hint": "<string>"
+      },
+      "response": {
+        "success": true,
+        "data": {
+          "hint": {
+            "id": "<same id>",
+            "hint": "<new hint text>",
+            "updated_at": "<updated ISO8601>"
+          }
+        }
+      }
+    },
+    "DELETE": {
+      "request": {
+        "method": "DELETE",
+        "id": "<string>"
+      },
+      "response": {
+        "success": true,
+        "data": {
+          "message": "<string>"
+        }
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "name": "hints without method returns schema help",
+      "request": {},
+      "assertions": {
+        "success": true,
+        "data.schema": "object with method enum"
+      }
+    },
+    {
+      "name": "hints CREATE then READ shows new hint",
+      "steps": [
+        {"request": {"method": "CREATE", "category": "tool", "key": "my_tool", "hint": "Use uppercase"}},
+        {"request": {"method": "READ", "category": "tool"}, "assertions": {"data.count": ">= 1"}}
+      ]
+    },
+    {
+      "name": "hints idempotent CREATE returns existing",
+      "steps": [
+        {"request": {"method": "CREATE", "category": "tool", "key": "dedup", "hint": "First"}},
+        {"request": {"method": "CREATE", "category": "tool", "key": "dedup", "hint": "Second"}},
+        {"assertions": "same id, hint still 'First'"}
+      ]
+    },
+    {
+      "name": "hints UPDATE changes hint text",
+      "steps": [
+        {"create": {"category": "general", "key": "test", "hint": "Old"}},
+        {"update": {"id": "<from create>", "hint": "New"}, "assertions": {"data.hint.hint": "New"}}
+      ]
+    },
+    {
+      "name": "hints DELETE removes hint",
+      "steps": [
+        {"create": {"category": "general", "key": "temp", "hint": "Temporary"}},
+        {"delete": {"id": "<from create>"}, "assertions": {"success": true}}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+"""Toolbox — a single-tool gateway pattern for LLM agents."""
+
+__version__ = "0.1.0"
+
+from .core import Toolbox, Tool
+from .hints import HintStore, Hint, MemoryHintStore
+from .backends.sqlite_store import SQLiteHintStore
+
+__all__ = [
+    "Toolbox",
+    "Tool",
+    "HintStore",
+    "Hint",
+    "MemoryHintStore",
+    "SQLiteHintStore",
+]
+
+# Opt-in: schema formatting utilities
+# Usage: from toolbox.schema import schema_to_csv, schema_to_markdown, data_to_csv
+# Requires: pip install ai-toolset[schema] (future: may add dependencies)

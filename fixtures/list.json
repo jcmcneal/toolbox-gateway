@@ -1,0 +1,43 @@
+{
+  "$description": "Expected response shape for toolbox list command",
+  "request": {
+    "command": "list"
+  },
+  "response": {
+    "success": true,
+    "data": {
+      "tools": [
+        {"name": "<string>", "description": "<string>"}
+      ],
+      "count": "<number>"
+    }
+  },
+  "test_cases": [
+    {
+      "name": "list returns all visible tools",
+      "setup": ["tool_a", "tool_b", "tool_c"],
+      "assertions": {
+        "success": true,
+        "data.tools.length": 3,
+        "data.count": 3
+      }
+    },
+    {
+      "name": "list hides tools with is_hidden/isHidden",
+      "setup": ["visible_tool", "hidden_tool(hidden)"],
+      "assertions": {
+        "success": true,
+        "data.tools.length": 1,
+        "data.tools[0].name": "visible_tool"
+      }
+    },
+    {
+      "name": "list includes descriptions",
+      "setup": ["describe_me"],
+      "assertions": {
+        "success": true,
+        "data.tools[0].description": "non-empty string"
+      }
+    }
+  ]
+}

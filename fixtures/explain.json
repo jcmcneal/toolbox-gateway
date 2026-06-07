@@ -1,0 +1,57 @@
+{
+  "$description": "Expected response shape for toolbox explain command",
+  "request": {
+    "command": "explain",
+    "toolNames": ["<array of strings>"]
+  },
+  "response": {
+    "success": true,
+    "data": {
+      "explanations": {
+        "<tool_name>": {
+          "description": "<string>",
+          "schema": "<object>"
+        }
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "name": "explain returns schema for named tools",
+      "setup": ["tool_a", "tool_b"],
+      "request": {"toolNames": ["tool_a", "tool_b"]},
+      "assertions": {
+        "success": true,
+        "data.explanations.tool_a.description": "non-empty string",
+        "data.explanations.tool_a.schema.properties": "object with typed fields"
+      }
+    },
+    {
+      "name": "explain reports not_found for missing tools",
+      "setup": ["tool_a"],
+      "request": {"toolNames": ["tool_a", "ghost"]},
+      "assertions": {
+        "success": true,
+        "data.explanations.tool_a": "exists",
+        "data.not_found": ["ghost"]
+      }
+    },
+    {
+      "name": "explain fails when no toolNames provided",
+      "request": {"toolNames": []},
+      "assertions": {
+        "success": false,
+        "error": "non-empty string"
+      }
+    },
+    {
+      "name": "explain fails when all tools not found",
+      "setup": ["tool_a"],
+      "request": {"toolNames": ["ghost1", "ghost2"]},
+      "assertions": {
+        "success": false,
+        "error": "contains ghost1 or ghost2"
+      }
+    }
+  ]
+}

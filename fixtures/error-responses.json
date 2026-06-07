@@ -1,0 +1,51 @@
+{
+  "$description": "Contract: error response shape — both Python and JS MUST match this structure",
+  "response_shape": {
+    "success": false,
+    "data": "nullable object (may have context like tool_name)",
+    "error": "<string>",
+    "duration_ms": "<nullable number>"
+  },
+  "test_cases": [
+    {
+      "name": "unknown command",
+      "request": {"command": "nonexistent"},
+      "assertions": {
+        "success": false,
+        "error": "non-empty string"
+      }
+    },
+    {
+      "name": "run without toolName",
+      "request": {"command": "run", "subject": "Missing tool name"},
+      "assertions": {
+        "success": false,
+        "error": "mentions toolName"
+      }
+    },
+    {
+      "name": "run without subject",
+      "request": {"command": "run", "toolName": "some_tool"},
+      "assertions": {
+        "success": false,
+        "error": "mentions subject"
+      }
+    },
+    {
+      "name": "explain with no tool names",
+      "request": {"command": "explain", "toolNames": []},
+      "assertions": {
+        "success": false,
+        "error": "non-empty string"
+      }
+    },
+    {
+      "name": "unknown tool for run",
+      "request": {"command": "run", "toolName": "ghost_123", "subject": "testing"},
+      "assertions": {
+        "success": false,
+        "error": "mentions not found"
+      }
+    }
+  ]
+}

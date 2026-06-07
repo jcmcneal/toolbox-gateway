@@ -1,0 +1,60 @@
+{
+  "$description": "Expected response shape for toolbox run command",
+  "request": {
+    "command": "run",
+    "toolName": "<string>",
+    "subject": "<string, 5-80 chars>",
+    "args": "<object, optional>"
+  },
+  "response": {
+    "success": true,
+    "data": {
+      "result": "<any>",
+      "tool_name": "<string>",
+      "source": "native | mcp",
+      "duration_ms": "<number>"
+    }
+  },
+  "test_cases": [
+    {
+      "name": "run executes a tool and returns result",
+      "setup": ["echo_tool"],
+      "request": {
+        "toolName": "echo_tool",
+        "subject": "Testing echo functionality",
+        "args": {"message": "hello"}
+      },
+      "assertions": {
+        "success": true,
+        "data.source": "native",
+        "data.result": "reflects input args",
+        "duration_ms": "non-negative number"
+      }
+    },
+    {
+      "name": "run requires toolName",
+      "request": {"subject": "No tool name provided"},
+      "assertions": {
+        "success": false,
+        "error": "mentions toolName"
+      }
+    },
+    {
+      "name": "run requires subject",
+      "request": {"toolName": "echo_tool"},
+      "assertions": {
+        "success": false,
+        "error": "mentions subject"
+      }
+    },
+    {
+      "name": "run unknown tool returns error",
+      "setup": ["echo_tool"],
+      "request": {"toolName": "ghost_tool", "subject": "Trying ghost tool"},
+      "assertions": {
+        "success": false,
+        "error": "mentions not found"
+      }
+    }
+  ]
+}
