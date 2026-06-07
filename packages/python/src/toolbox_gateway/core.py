@@ -95,9 +95,42 @@ class Toolbox:
         self._mcp_registry = mcp_registry
         self._schema_format = schema_format
 
+    @classmethod
+    def from_definitions(
+        cls,
+        definitions: list[dict],
+        dispatcher: Callable[[str, dict], Any],
+        hint_store: Optional[HintStore] = None,
+        schema_format: str = "markdown",
+    ) -> "Toolbox":
+        """Build a Toolbox from external tool definitions.
+
+        Each definition dict should have:
+        - ``name``: tool name
+        - ``description``: short description for the LLM
+        - ``schema``: JSON Schema dict for the tool's parameters
+
+        The *dispatcher* is called as ``dispatcher(name, args)`` to execute
+        each tool. Use it to bridge to a host application's tool registry.
+
+        Useful for host apps that already have a tool registry and don't
+        want to translate entries into ``Tool`` objects manually.
+        """
+        tools = [
+            Tool(
+                name=d["name"],
+                description=d.get("description", ""),
+                schema=d.get("schema", {}),
+                execute=lambda args, _name=d["name"], **kw: dispatcher(_name, args),
+            )
+            for d in definitions
+        ]
+        return cls(tools=tools, hint_store=hint_store, schema_format=schema_format)
+
     # ── Tool Definition ──────────────────────────────────────────────
 
-    def get_tool_definition(self) -> dict[str, Any]:
+    @classmethod
+    def get_tool_definition(cls) -> dict[str, Any]:
         """Return the single tool schema to include in your LLM's tool list.
 
         This is the ONLY schema that goes in the system prompt. All other
@@ -445,6 +478,19 @@ class Toolbox:
 
 
 GATEWAY_TOOL_NAME = "toolbox"
+
+
+def is_available() -> bool:
+    """True if the toolbox_gateway package is importable.
+
+    Convenience for host applications that want to check availability
+    without a try/except block.
+    """
+    try:
+        import toolbox_gateway  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def is_gateway_call(tool_name: str, args: dict | None) -> bool:

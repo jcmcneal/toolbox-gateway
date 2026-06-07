@@ -2,7 +2,7 @@
 
 __version__ = "0.1.0"
 
-from .core import Toolbox, Tool, is_gateway_call, unwrap_gateway_call, GATEWAY_TOOL_NAME
+from .core import Toolbox, Tool, is_available, is_gateway_call, unwrap_gateway_call, GATEWAY_TOOL_NAME
 from .hints import HintStore, Hint, MemoryHintStore
 from .backends.sqlite_store import SQLiteHintStore
 
@@ -10,6 +10,7 @@ __all__ = [
     "Toolbox",
     "Tool",
     "GATEWAY_TOOL_NAME",
+    "is_available",
     "is_gateway_call",
     "unwrap_gateway_call",
     "HintStore",
