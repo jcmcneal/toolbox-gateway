@@ -2,7 +2,7 @@
 
 import pytest
 
-from toolbox import Toolbox, Tool, MemoryHintStore
+from toolbox_gateway import Toolbox, Tool, MemoryHintStore
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ class TestServersCommand:
         assert "No MCP registry" in result.error
 
     def test_servers_lists_registered_servers(self):
-        from toolbox.mcp import MCPRegistry, MCPServerInfo
+        from toolbox_gateway.mcp import MCPRegistry, MCPServerInfo
 
         registry = MCPRegistry()
         registry.register_server(MCPServerInfo(id="test", name="Test Server", use_when="Testing"))

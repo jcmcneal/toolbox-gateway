@@ -37,7 +37,7 @@ pip install toolbox-gateway
 ```
 
 ```python
-from toolbox import Toolbox, Tool
+from toolbox_gateway import Toolbox, Tool
 
 tools = [Tool(name="greet", description="Say hello",
     schema={"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},
@@ -66,7 +66,7 @@ import { Toolbox, MemoryHintStore, SQLiteHintStore, schemaToCsv } from 'toolbox-
 const tb = new Toolbox([/* tools */], new MemoryHintStore());
 
 // SQLite hint store (requires: npm install better-sqlite3)
-const store = new SQLiteHintStore({ path: '.toolbox/hints.db' });
+const store = new SQLiteHintStore({ path: '.toolbox_gateway/hints.db' });
 
 // Schema formatting
 schemaToCsv(mySchema);

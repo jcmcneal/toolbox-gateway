@@ -2,7 +2,7 @@
 
 import pytest
 
-from toolbox.schema import schema_to_csv, schema_to_markdown, data_to_csv
+from toolbox_gateway.schema import schema_to_csv, schema_to_markdown, data_to_csv
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────

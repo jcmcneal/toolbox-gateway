@@ -5,8 +5,8 @@ import tempfile
 
 import pytest
 
-from toolbox.hints import Hint
-from toolbox.backends.sqlite_store import SQLiteHintStore
+from toolbox_gateway.hints import Hint
+from toolbox_gateway.backends.sqlite_store import SQLiteHintStore
 
 
 @pytest.fixture
