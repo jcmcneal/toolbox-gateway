@@ -2,7 +2,7 @@
 
 import pytest
 
-from toolbox.mcp import MCPRegistry, MCPServerInfo
+from toolbox_gateway.mcp import MCPRegistry, MCPServerInfo
 
 
 class SimpleMCPServer(MCPServerInfo):
@@ -61,7 +61,7 @@ class TestMCPRegistry:
         assert servers[1]["id"] == "low"
 
     def test_mcp_list_tools_via_toolbox(self):
-        from toolbox import Toolbox, Tool
+        from toolbox_gateway import Toolbox, Tool
 
         registry = MCPRegistry()
         registry.register_server(SimpleMCPServer(
@@ -79,7 +79,7 @@ class TestMCPRegistry:
         assert result.data["tools"][0]["name"] == "mcp_tool"
 
     def test_mcp_run_via_toolbox(self):
-        from toolbox import Toolbox, Tool
+        from toolbox_gateway import Toolbox, Tool
 
         registry = MCPRegistry()
         registry.register_server(SimpleMCPServer(id="test", name="Test", use_when="Testing"))
@@ -91,7 +91,7 @@ class TestMCPRegistry:
         assert result.data["source"] == "mcp"
 
     def test_mcp_list_fails_without_registry(self):
-        from toolbox import Toolbox, Tool
+        from toolbox_gateway import Toolbox, Tool
 
         tb = Toolbox(tools=[Tool(name="t", description="T", schema={}, execute=lambda _: None)])
         result = tb.handle(command="list", mcp="nonexistent")

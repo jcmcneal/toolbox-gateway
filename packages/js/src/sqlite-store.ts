@@ -7,7 +7,7 @@
  * Usage::
  *
  *     import { SQLiteHintStore } from 'toolbox-gateway';
- *     const store = new SQLiteHintStore();                          // .toolbox/hints.db
+ *     const store = new SQLiteHintStore();                          // .toolbox_gateway/hints.db
  *     const store = new SQLiteHintStore({ path: 'data/my_hints.db' });  // custom path
  */
 
@@ -16,7 +16,7 @@ import type { Hint, HintStore } from "./index.js";
 // We use a dynamic import pattern so better-sqlite3 is truly optional.
 // The ctor will throw at construction time if the module isn't available.
 
-const DEFAULT_DB_PATH = ".toolbox/hints.db";
+const DEFAULT_DB_PATH = ".toolbox_gateway/hints.db";
 
 interface Sqlite3Database {
   exec(sql: string): void;

@@ -2,7 +2,7 @@
 
 import pytest
 
-from toolbox.hints import Hint, MemoryHintStore
+from toolbox_gateway.hints import Hint, MemoryHintStore
 
 
 class TestMemoryHintStore:

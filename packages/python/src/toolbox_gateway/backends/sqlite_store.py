@@ -11,7 +11,7 @@ from typing import Optional
 from ..hints import Hint, HintStore
 
 
-DEFAULT_DB_PATH = ".toolbox/hints.db"
+DEFAULT_DB_PATH = ".toolbox_gateway/hints.db"
 
 
 class SQLiteHintStore:
@@ -22,7 +22,7 @@ class SQLiteHintStore:
 
     Usage::
 
-        store = SQLiteHintStore()                          # .toolbox/hints.db
+        store = SQLiteHintStore()                          # .toolbox_gateway/hints.db
         store = SQLiteHintStore(path="data/my_hints.db")   # custom path
     """
 

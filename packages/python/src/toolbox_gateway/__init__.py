@@ -16,5 +16,5 @@ __all__ = [
 ]
 
 # Opt-in: schema formatting utilities
-# Usage: from toolbox.schema import schema_to_csv, schema_to_markdown, data_to_csv
+# Usage: from toolbox_gateway.schema import schema_to_csv, schema_to_markdown, data_to_csv
 # Requires: pip install toolbox-gateway[schema] (future: may add dependencies)

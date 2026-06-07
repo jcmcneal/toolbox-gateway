@@ -39,7 +39,7 @@ line-length = 100
 select = ["E", "F", "I", "N", "UP", "B"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/toolbox"]
+packages = ["src/toolbox_gateway"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
