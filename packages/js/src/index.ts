@@ -263,6 +263,9 @@ export class Toolbox {
     const args = (params.args as Record<string, unknown>) ?? {};
 
     if (!toolName) return { success: false, error: 'run requires toolName' };
+    if (['list', 'explain', 'run', 'servers', 'hints'].includes(toolName)) {
+      return { success: false, error: `'${toolName}' is a toolbox command, not a tool to run. Call toolbox with command='${toolName}' instead.` };
+    }
     if (!subject) return { success: false, error: 'run requires subject — explain what you are doing' };
 
     // MCP routing

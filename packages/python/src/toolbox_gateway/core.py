@@ -32,6 +32,10 @@ class ToolboxCommand(str, Enum):
     HINTS = "hints"
 
 
+# Reserved command names that cannot be used as tool names via the run command
+RESERVED_COMMAND_NAMES: set[str] = {cmd.value for cmd in ToolboxCommand}
+
+
 @dataclass
 class Tool:
     """A tool that can be discovered and executed via toolbox."""
@@ -369,6 +373,12 @@ class Toolbox:
     ) -> ToolResult:
         if not toolName:
             return ToolResult(success=False, error="run requires toolName")
+        if toolName in RESERVED_COMMAND_NAMES:
+            return ToolResult(
+                success=False,
+                error=f"'{toolName}' is a toolbox command, not a tool to run. "
+                      f"Call toolbox with command='{toolName}' instead.",
+            )
         if not subject:
             return ToolResult(success=False, error="run requires subject — explain what you are doing")
 
