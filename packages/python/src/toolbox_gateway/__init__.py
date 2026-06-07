@@ -2,7 +2,22 @@
 
 __version__ = "0.1.0"
 
-from .core import Toolbox, Tool, is_available, is_gateway_call, unwrap_gateway_call, GATEWAY_TOOL_NAME
+from .core import (
+    Toolbox,
+    Tool,
+    GATEWAY_TOOL_NAME,
+    TOOLSET_DEFINITION,
+    detail_for_command,
+    filter_to_gateway_only,
+    is_available,
+    is_gateway_call,
+    label_for_command,
+    preview_for_command,
+    should_collapse_to_gateway,
+    spinner_label,
+    unwrap_gateway_call,
+    unwrap_with_subject,
+)
 from .hints import HintStore, Hint, MemoryHintStore
 from .backends.sqlite_store import SQLiteHintStore
 
@@ -10,9 +25,17 @@ __all__ = [
     "Toolbox",
     "Tool",
     "GATEWAY_TOOL_NAME",
+    "TOOLSET_DEFINITION",
+    "detail_for_command",
+    "filter_to_gateway_only",
     "is_available",
     "is_gateway_call",
+    "label_for_command",
+    "preview_for_command",
+    "should_collapse_to_gateway",
+    "spinner_label",
     "unwrap_gateway_call",
+    "unwrap_with_subject",
     "HintStore",
     "Hint",
     "MemoryHintStore",

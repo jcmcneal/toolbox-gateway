@@ -116,18 +116,46 @@ class Toolbox:
         Useful for host apps that already have a tool registry and don't
         want to translate entries into ``Tool`` objects manually.
         """
-        tools = [
-            Tool(
-                name=d["name"],
-                description=d.get("description", ""),
-                schema=d.get("schema", {}),
-                execute=lambda args, _name=d["name"], **kw: dispatcher(_name, args),
-            )
-            for d in definitions
-        ]
-        return cls(tools=tools, hint_store=hint_store, schema_format=schema_format)
+        return cls(
+            tools=_definitions_to_tools(definitions, dispatcher),
+            hint_store=hint_store,
+            schema_format=schema_format,
+        )
 
-    # ── Tool Definition ──────────────────────────────────────────────
+    @classmethod
+    def from_provider(
+        cls,
+        provider: Callable[[], list[dict]],
+        dispatcher: Callable[[str, dict], Any],
+        hint_store: Optional[HintStore] = None,
+        schema_format: str = "markdown",
+    ) -> "Toolbox":
+        """Build a Toolbox where the tool list is fetched lazily from a provider.
+
+        *provider* is a zero-arg callable returning the list of definition
+        dicts (same shape as ``from_definitions``). It is called each time
+        the gateway needs the current tool list — so adding/removing tools
+        in the host application is reflected automatically.
+
+        *dispatcher* routes execution back to the host.
+
+        Use ``toolbox.refresh()`` to force re-read of the provider.
+        """
+        instance = cls(
+            tools=_definitions_to_tools(provider(), dispatcher),
+            hint_store=hint_store,
+            schema_format=schema_format,
+        )
+        instance._provider = provider
+        instance._dispatcher = dispatcher
+        return instance
+
+    def refresh(self) -> None:
+        """Re-fetch the tool list from the provider. No-op if not a provider-built toolbox."""
+        provider = getattr(self, "_provider", None)
+        if provider is None:
+            return
+        self._tools = {t.name: t for t in _definitions_to_tools(provider(), self._dispatcher)}
 
     @classmethod
     def get_tool_definition(cls) -> dict[str, Any]:
@@ -212,6 +240,23 @@ class Toolbox:
             ToolboxCommand.HINTS: self._handle_hints,
         }
         return handlers[cmd](**kwargs)
+
+    def handle_args(self, args: dict) -> ToolResult:
+        """Like ``handle()`` but takes the raw LLM tool-call args dict.
+
+        Convenience for host applications: forward the entire args dict
+        here and the package routes the right command handler.
+
+        The ``command`` key must be present; other keys are passed through
+        to the appropriate handler. Unknown commands return an error.
+        """
+        if not args:
+            return ToolResult(success=False, error="Missing command")
+        command = args.get("command", "")
+        if not command:
+            return ToolResult(success=False, error="Missing command")
+        forward = {k: v for k, v in args.items() if k != "command"}
+        return self.handle(command=command, **forward)
 
     # ── List ──────────────────────────────────────────────────────────
 
@@ -515,3 +560,208 @@ def unwrap_gateway_call(tool_name: str, args: dict) -> tuple[str, dict]:
     if is_gateway_call(tool_name, args):
         return args["toolName"], args.get("args") or {}
     return tool_name, args
+
+
+def _definitions_to_tools(
+    definitions: list[dict],
+    dispatcher: Callable[[str, dict], Any],
+) -> list["Tool"]:
+    """Convert definition dicts to ``Tool`` objects wired to *dispatcher*."""
+    return [
+        Tool(
+            name=d["name"],
+            description=d.get("description", ""),
+            schema=d.get("schema", {}),
+            execute=lambda args, _name=d["name"], **kw: dispatcher(_name, args),
+        )
+        for d in definitions
+    ]
+
+
+# ── Tool definitions (for the LLM) ───────────────────────────────
+# Schema for the gateway tool — kept in one place so the prompt
+# text and parameter definitions stay in sync.
+
+
+def _toolbox_definition() -> dict[str, Any]:
+    """Return the canonical toolbox schema. See ``Toolbox.get_tool_definition``."""
+    return Toolbox.get_tool_definition()
+
+
+# ── Filter helpers ───────────────────────────────────────────────
+# Convenience for host apps that want to collapse N tool definitions
+# into a single gateway definition (the "shoebox" pattern).
+
+
+def filter_to_gateway_only(
+    tools: list[dict],
+    gateway_name: str = GATEWAY_TOOL_NAME,
+) -> list[dict]:
+    """Return only the gateway tool definition from a list of tool defs.
+
+    Each input dict is expected to have a ``"function": {"name": ...}``
+    or top-level ``"name"`` key. Pass OpenAI-style function-calling
+    tool defs (with ``"function": {"name": ...}`` wrapper) or plain
+    toolbox-style defs and it figures out which.
+
+    Returns the gateway definition if present, else an empty list.
+    Use this to drop N tool schemas from a system prompt when the
+    gateway is enabled.
+    """
+    out = []
+    for t in tools:
+        name = t.get("function", t).get("name")
+        if name == gateway_name:
+            out.append(t)
+    return out
+
+
+def should_collapse_to_gateway(
+    available_tool_names: set[str],
+    gateway_name: str = GATEWAY_TOOL_NAME,
+) -> bool:
+    """True if the gateway is in the available set AND the package is installed.
+
+    Use this to decide whether to drop all other tool schemas from the
+    prompt and replace them with the single gateway definition.
+    """
+    return gateway_name in available_tool_names and is_available()
+
+
+# ── Display / spinner helpers ────────────────────────────────────
+# Host apps that render a spinner or completion line per tool call
+# can use these to apply gateway-aware formatting consistently.
+
+
+def spinner_label(tool_name: str, args: dict | None) -> str | None:
+    """Return a short label for a tool call's spinner, or None for default.
+
+    For gateway calls (``toolbox list`` etc.), returns a short label
+    like ``"toolbox"`` to suppress verbose "preparing toolbox…" messages.
+    """
+    if tool_name == GATEWAY_TOOL_NAME and args:
+        command = args.get("command", "")
+        if command in ("list", "explain", "servers", "hints"):
+            return "toolbox"
+    return None
+
+
+def unwrap_with_subject(
+    tool_name: str,
+    args: dict,
+) -> tuple[str, dict, str]:
+    """Unwrap a gateway call, returning (inner_name, inner_args, subject).
+
+    The subject is the toolbox annotation (the LLM's brief intent
+    description). For non-gateway calls, returns the input unchanged
+    and an empty subject.
+
+    The subject is also embedded into the returned ``inner_args`` under
+    the key ``"_subject"`` so display layers can pass the result
+    through unchanged. The top-level ``subject`` return is for
+    callers that want to handle the annotation separately.
+
+    Convenience for display layers: the host's renderer can call
+    this once, then render the inner tool with the args dict as-is
+    (the ``_subject`` key is then a no-op for non-display code).
+    """
+    inner_name, inner_args = unwrap_gateway_call(tool_name, args)
+    subject = ""
+    if inner_name != tool_name and (args or {}).get("subject"):
+        subject = args["subject"]
+        inner_args = dict(inner_args or {})
+        inner_args["_subject"] = subject
+    return inner_name, inner_args, subject
+
+
+def preview_for_command(command: str, args: dict | None) -> str | None:
+    """Return the *full* preview string for a non-``run`` gateway command.
+
+    Use this when you need a single self-contained preview string
+    (e.g. for ``build_tool_preview``). For cute-message formatting,
+    use ``label_for_command()`` instead so the verb and detail can
+    be aligned separately.
+
+    Examples:
+    - list → "list tools"
+    - hints READ → "read hints"
+    - explain terminal,read_file → "explain terminal, read_file"
+    - servers → "list servers"
+    """
+    args = args or {}
+    if command == "list":
+        return "list tools"
+    if command == "explain":
+        names = args.get("toolNames") or ([args.get("toolName", "")] if args.get("toolName") else [])
+        if names:
+            joined = ", ".join(names) if isinstance(names, list) else str(names)
+            return f"explain {joined}"
+        return "explain"
+    if command == "hints":
+        method = (args.get("method") or "READ").upper()
+        verb = "browse" if method == "READ" else method.lower()
+        return f"{verb} hints"
+    if command == "servers":
+        return "list servers"
+    return command or None
+
+
+def label_for_command(command: str, args: dict | None) -> str:
+    """Return a short verb (3-7 chars) for a non-``run`` gateway command.
+
+    Used by display layers to format cute-tool-message lines.
+    """
+    args = args or {}
+    if command == "list":
+        return "list"
+    if command == "explain":
+        return "explain"
+    if command == "hints":
+        method = (args.get("method") or "READ").upper()
+        return "browse" if method == "READ" else method.lower()
+    if command == "servers":
+        return "servers"
+    return (command or "")[:9]
+
+
+def detail_for_command(command: str, args: dict | None) -> str:
+    """Return the *detail* (after the verb) for a non-``run`` gateway command.
+
+    Pair with ``label_for_command()`` to assemble aligned cute-message
+    lines. For self-contained preview strings, use ``preview_for_command()``.
+
+    Examples:
+    - list → "tools"
+    - hints → "hints"
+    - explain terminal,read_file → "terminal, read_file"
+    - servers → "servers"
+    """
+    args = args or {}
+    if command == "list":
+        return "tools"
+    if command == "explain":
+        names = args.get("toolNames") or ([args.get("toolName", "")] if args.get("toolName") else [])
+        if names:
+            return ", ".join(names) if isinstance(names, list) else str(names)
+        return ""
+    if command == "hints":
+        return "hints"
+    if command == "servers":
+        return "servers"
+    return command or ""
+
+
+# ── Toolset definition (Hermes-style) ────────────────────────────
+# Standard "toolset" descriptor for hosts that group tools by
+# use-case. The toolbox toolset contains only the gateway tool.
+
+
+TOOLSET_DEFINITION: dict[str, Any] = {
+    "name": GATEWAY_TOOL_NAME,
+    "description": (
+        "Toolbox gateway — collapse niche tools into a single discovery tool. "
+        "The LLM uses toolbox list/explain/run to find and invoke infrequently-needed "
+        "tools instead of bloating the system prompt with all their schemas."
+    ),
+    "tools": [GATEWAY_TOOL_NAME],
+}
