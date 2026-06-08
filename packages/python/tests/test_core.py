@@ -127,20 +127,24 @@ class TestListCommand:
         assert result.data["tools"][0]["schema"] != {}
 
     def test_list_detail_markdown(self):
-        """detail=markdown includes schema_md per tool."""
+        """detail=markdown returns markdown table, not tools array."""
         tb = make_toolbox(1)
         result = tb.handle(command="list", detail="markdown")
 
-        assert "schema_md" in result.data["tools"][0]
-        assert result.data["tools"][0]["schema_md"] != ""
+        assert "markdown" in result.data
+        assert "tools" not in result.data
+        assert result.data["count"] == 1
+        assert "tool_0" in result.data["markdown"]
 
     def test_list_detail_csv(self):
-        """detail=csv includes schema_csv per tool."""
+        """detail=csv returns csv text, not tools array."""
         tb = make_toolbox(1)
         result = tb.handle(command="list", detail="csv")
 
-        assert "schema_csv" in result.data["tools"][0]
-        assert result.data["tools"][0]["schema_csv"] != ""
+        assert "csv" in result.data
+        assert "tools" not in result.data
+        assert result.data["count"] == 1
+        assert "tool_0" in result.data["csv"]
 
     def test_list_detail_params_explicit(self):
         """detail=params is the same as default."""
@@ -174,20 +178,24 @@ class TestListCommand:
         assert result.data["tools"][0]["schema"] == {}
 
     def test_list_markdown_for_tool_with_empty_schema(self):
-        """Tools with empty schema get '' for schema_md."""
+        """Tools with empty schema still appear in markdown table."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
         tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
         result = tb.handle(command="list", detail="markdown")
 
-        assert result.data["tools"][0]["schema_md"] == ""
+        assert "markdown" in result.data
+        assert result.data["count"] == 1
+        assert "empty" in result.data["markdown"]
 
     def test_list_csv_for_tool_with_empty_schema(self):
-        """Tools with empty schema get '' for schema_csv."""
+        """Tools with empty schema still appear in csv output."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
         tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
         result = tb.handle(command="list", detail="csv")
 
-        assert result.data["tools"][0]["schema_csv"] == ""
+        assert "csv" in result.data
+        assert result.data["count"] == 1
+        assert "empty" in result.data["csv"]
 
 
 # ── Explain Command ──────────────────────────────────────────────────
@@ -200,8 +208,8 @@ class TestExplainCommand:
         assert result.success
         assert "tool_0" in result.data["explanations"]
         assert "tool_2" in result.data["explanations"]
-        assert result.data["explanations"]["tool_0"]["markdown"]  # non-empty string
-        assert "tool_0" in result.data["explanations"]["tool_0"]["markdown"]
+        assert result.data["explanations"]["tool_0"]  # non-empty string
+        assert "tool_0" in result.data["explanations"]["tool_0"]
 
     def test_explain_reports_not_found(self):
         tb = make_toolbox(2)

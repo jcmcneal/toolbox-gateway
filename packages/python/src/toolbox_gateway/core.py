@@ -286,36 +286,32 @@ class Toolbox:
         if mcp:
             return self._list_mcp_tools(mcp, detail=detail)
 
+        visible = [(name, t) for name, t in self._tools.items() if not t.is_hidden]
+
+        # ── Text formats: return only the rendered string ────────────
+        if detail == "markdown":
+            from .schema import data_to_csv
+            rows = [{"name": name, "description": t.description} for name, t in visible]
+            text = data_to_csv(rows, columns=["name", "description"], fence_block="Available Tools")
+            return ToolResult(success=True, data={"markdown": text, "count": len(rows)})
+
+        if detail == "csv":
+            from .schema import data_to_csv
+            rows = [{"name": name, "description": t.description} for name, t in visible]
+            text = data_to_csv(rows, columns=["name", "description"], fence_block="Available Tools")
+            return ToolResult(success=True, data={"csv": text, "count": len(rows)})
+
+        # ── Structured formats: return JSON tools array ──────────────
         tools = []
-        for name, t in self._tools.items():
-            if t.is_hidden:
-                continue
+        for name, t in visible:
             entry: dict[str, Any] = {"name": name, "description": t.description}
 
-            if detail == "names":
-                pass  # just name + description
-            elif detail == "params":
+            if detail == "params":
                 from .schema import schema_to_compact_params
                 entry["params"] = schema_to_compact_params(t.schema)
             elif detail == "json":
                 entry["schema"] = t.schema
-            elif detail == "markdown":
-                if t.schema and t.schema.get("properties"):
-                    from .schema import schema_to_markdown
-                    entry["schema_md"] = schema_to_markdown(
-                        t.schema, title=name, description=t.description,
-                    )
-                else:
-                    entry["schema_md"] = ""
-            elif detail == "csv":
-                if t.schema and t.schema.get("properties"):
-                    from .schema import schema_to_csv
-                    try:
-                        entry["schema_csv"] = schema_to_csv(t.schema, comment=name)
-                    except ValueError:
-                        entry["schema_csv"] = ""
-                else:
-                    entry["schema_csv"] = ""
+            # detail == "names": just name + description
 
             tools.append(entry)
 
@@ -365,9 +361,9 @@ class Toolbox:
                         title=name,
                         description=tool.description,
                     )
-                    explanations[name] = {"markdown": md, "description": tool.description}
+                    explanations[name] = md
                 else:
-                    # Default: raw JSON schema
+                    # JSON format: raw schema dict per tool
                     explanations[name] = {
                         "description": tool.description,
                         "schema": tool.schema,
