@@ -9,13 +9,13 @@
 
 // ── Re-exports ──────────────────────────────────────────────────────
 
-export { schemaToCsv, schemaToMarkdown, dataToCsv, schemaToCompactParams } from "./schema.js";
+export { schemaToCsv, schemaToMarkdown, dataToCsv, dataToCsvWithTypeHints, schemaToCompactParams } from "./schema.js";
 export { SQLiteHintStore } from "./sqlite-store.js";
 export { MCPRegistry } from "./mcp.js";
 
 // ── Local imports (needed by Toolbox implementation) ────────────────────
 
-import { schemaToMarkdown as _schemaToMarkdown, dataToCsv as _dataToCsv, schemaToCsv as _schemaToCsv, schemaToCompactParams } from "./schema.js";
+import { schemaToMarkdown as _schemaToMarkdown, dataToCsv as _dataToCsv, dataToCsvWithTypeHints as _dataToCsvWithTypeHints, schemaToCsv as _schemaToCsv, schemaToCompactParams } from "./schema.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -79,11 +79,13 @@ export const TOOLBOX_SCHEMA = {
   description: `CLI-style gateway for all tools.
 
 Commands:
-- list: Show all available tools with descriptions (use mcp for MCP tools, detail for detail level)
-- explain: Get schema docs for one or more tools (provide toolNames, use mcp for MCP tools)
-- run: Execute a tool (requires toolName and subject, use mcp for MCP tools)
+- list: Show all available tools with descriptions (use --mcp=serverId for MCP tools, --detail=names|params|schema for per-entry fields)
+- explain: Get schema docs for one or more tools (provide toolNames, use --mcp=serverId for MCP tools, --format=json for raw JSON Schema)
+- run: Execute a tool (requires toolName and subject, use --mcp=serverId for MCP tools)
 - servers: List available MCP servers and their descriptions
 - hints: Manage universal hints for tool usage, gotchas, and MCP shortcuts (method: READ|CREATE|UPDATE|DELETE)
+
+The host controls the response format for list and explain via schema_format: 'json' (plain JSON), 'markdown' (fenced CSV/docs), or 'csv' (raw CSV with type hints). Default is 'markdown'.
 
 Always provide a "subject" when using "run" to explain your intent.`,
   parameters: {
@@ -96,13 +98,18 @@ Always provide a "subject" when using "run" to explain your intent.`,
       },
       detail: {
         type: 'string',
-        enum: ['params', 'names', 'json', 'markdown', 'csv'],
-        description: 'Detail level for list command: params (default), names, json, markdown, csv',
+        enum: ['names', 'params', 'schema'],
+        description: 'Per-entry fields for list: names (name+desc only), params (add compact param hints, default), schema (add full JSON Schema)',
       },
       toolNames: {
         type: 'array',
         items: { type: 'string' },
         description: 'Tools to explain (for explain command, accepts multiple)',
+      },
+      format: {
+        type: 'string',
+        enum: ['json'],
+        description: 'Force JSON output for explain, overriding schema_format',
       },
       toolName: {
         type: 'string',
@@ -113,7 +120,7 @@ Always provide a "subject" when using "run" to explain your intent.`,
         minLength: 5,
         maxLength: 80,
         description:
-          'One-liner description of what you are doing. No more than 10 words. Do not reveal internal tool names.',
+          'One-liner description of what you are doing. No more than 10 words. Do not reveal internal tool names or how it is handled internally.',
       },
       args: {
         type: 'object',
@@ -121,7 +128,7 @@ Always provide a "subject" when using "run" to explain your intent.`,
       },
       mcp: {
         type: 'string',
-        description: 'MCP server ID to route command to',
+        description: 'MCP server ID to route command to (required for MCP tools)',
       },
     },
     required: ['command'],
@@ -134,14 +141,14 @@ export class Toolbox {
   private tools: Map<string, ToolInput>;
   private hintStore: HintStore;
   private mcpRegistry: MCPRegistryLike | null;
-  private schemaFormat: 'json' | 'markdown';
+  private schemaFormat: 'json' | 'markdown' | 'csv';
 
   constructor(
     tools: ToolInput[],
     opts?: {
       hintStore?: HintStore;
       mcpRegistry?: MCPRegistryLike;
-      schemaFormat?: 'json' | 'markdown';
+      schemaFormat?: 'json' | 'markdown' | 'csv';
     },
   ) {
     this.tools = new Map(tools.map((t) => [t.name, t]));
@@ -177,54 +184,61 @@ export class Toolbox {
   }
 
   private handleList(params: Record<string, unknown>): ToolResult {
-    const validDetails = ["params", "names", "json", "markdown", "csv"];
+    const validDetails = ["names", "params", "schema"];
     const detail = (params.detail as string) ?? "params";
 
     if (params.detail !== undefined && !validDetails.includes(detail)) {
       return { success: false, error: `Invalid detail level: ${detail}. Valid options: ${validDetails.join(", ")}` };
     }
 
-    // MCP routing: --mcp=serverId
+    // MCP routing
     if (params.mcp) {
       return this.listMcpTools(params.mcp as string, detail);
     }
 
-    const tools = Array.from(this.tools.values())
+    // Build per-entry rows based on detail level
+    const rows = this.buildListRows(detail);
+
+    // Wrap in the host-configured schema_format envelope
+    if (this.schemaFormat === "markdown") {
+      const columns = this.listColumns(detail);
+      const text = _dataToCsv(rows, { columns, fenceBlock: "Available Tools" });
+      return { success: true, data: text };
+    }
+
+    if (this.schemaFormat === "csv") {
+      const columns = this.listColumns(detail);
+      const text = _dataToCsvWithTypeHints(rows, { columns, comment: "Available Tools" });
+      return { success: true, data: text };
+    }
+
+    // schemaFormat === "json" (or unrecognized, fall through to JSON)
+    return { success: true, data: { tools: rows, count: rows.length } };
+  }
+
+  private buildListRows(detail: string): Record<string, unknown>[] {
+    return Array.from(this.tools.values())
       .filter((t) => !t.isHidden)
       .map((t) => {
         const entry: Record<string, unknown> = { name: t.name, description: t.description };
-        if (detail === "names") {
-          // just name + description
+        if (detail === "schema") {
+          entry.schema = t.schema;
         } else if (detail === "params") {
           entry.params = schemaToCompactParams(t.schema as Record<string, unknown>);
-        } else if (detail === "json") {
-          entry.schema = t.schema;
-        } else if (detail === "markdown") {
-          const props = (t.schema as Record<string, unknown>)?.properties;
-          if (props && typeof props === 'object' && Object.keys(props).length > 0) {
-            entry.schema_md = _schemaToMarkdown(t.schema as Record<string, unknown>, {
-              title: t.name,
-              description: t.description,
-            });
-          } else {
-            entry.schema_md = "";
-          }
-        } else if (detail === "csv") {
-          const props = (t.schema as Record<string, unknown>)?.properties;
-          if (props && typeof props === 'object' && Object.keys(props).length > 0) {
-            try {
-              entry.schema_csv = _schemaToCsv(t.schema as Record<string, unknown>, t.name);
-            } catch {
-              entry.schema_csv = "";
-            }
-          } else {
-            entry.schema_csv = "";
-          }
         }
+        // detail === "names": just name + description
         return entry;
       });
+  }
 
-    return { success: true, data: { tools, count: tools.length } };
+  private listColumns(detail: string): string[] {
+    if (detail === "schema") {
+      return ["name", "description", "schema"];
+    }
+    if (detail === "params") {
+      return ["name", "description", "params"];
+    }
+    return ["name", "description"];
   }
 
   private listMcpTools(serverId: string, _detail: string = "params"): ToolResult {
@@ -254,8 +268,9 @@ export class Toolbox {
       return this.explainMcpTools(toolNames, params.mcp as string);
     }
 
+    // Per-call format override: 'json' forces raw schema regardless of default
     const perCallFormat = params.format as string | undefined;
-    const useMarkdown = this.schemaFormat === 'markdown' && perCallFormat !== 'json';
+    const effectiveFormat = perCallFormat === 'json' ? 'json' : this.schemaFormat;
 
     const explanations: Record<string, unknown> = {};
     const notFound: string[] = [];
@@ -263,12 +278,17 @@ export class Toolbox {
     for (const name of toolNames) {
       const tool = this.tools.get(name);
       if (tool) {
-        if (useMarkdown) {
-          const md = _schemaToMarkdown(tool.schema as Record<string, unknown>, {
+        if (effectiveFormat === 'markdown') {
+          explanations[name] = _schemaToMarkdown(tool.schema as Record<string, unknown>, {
             title: name,
             description: tool.description,
           });
-          explanations[name] = { markdown: md, description: tool.description };
+        } else if (effectiveFormat === 'csv') {
+          try {
+            explanations[name] = _schemaToCsv(tool.schema as Record<string, unknown>, name);
+          } catch {
+            explanations[name] = '';
+          }
         } else {
           explanations[name] = { description: tool.description, schema: tool.schema };
         }
@@ -281,6 +301,14 @@ export class Toolbox {
       return { success: false, error: `Tools not found: ${notFound.join(', ')}` };
     }
 
+    if (effectiveFormat === 'markdown' || effectiveFormat === 'csv') {
+      const sep = effectiveFormat === 'markdown' ? '\n\n' : '\n';
+      const text = Object.values(explanations).join(sep);
+      const notFoundText = notFound.length > 0 ? `\n\n# Not found: ${notFound.join(', ')}` : '';
+      return { success: true, data: text + notFoundText };
+    }
+
+    // JSON envelope
     const result: Record<string, unknown> = { explanations };
     if (notFound.length > 0) result.not_found = notFound;
     return { success: true, data: result };

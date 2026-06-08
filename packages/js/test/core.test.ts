@@ -21,12 +21,11 @@ function makeTool(overrides: Partial<ToolInput> & { name: string }): ToolInput {
 // ── list command (fixtures/list.json) ─────────────────────────────
 
 describe('toolbox list', () => {
-  it('returns all visible tools', async () => {
-    const tb = new Toolbox([
-      makeTool({ name: 'tool_a' }),
-      makeTool({ name: 'tool_b' }),
-      makeTool({ name: 'tool_c' }),
-    ]);
+  it('returns all visible tools in json format', async () => {
+    const tb = new Toolbox(
+      [makeTool({ name: 'tool_a' }), makeTool({ name: 'tool_b' }), makeTool({ name: 'tool_c' })],
+      { schemaFormat: 'json' },
+    );
 
     const result = await tb.handle('list', {});
     expect(result.success).toBe(true);
@@ -36,24 +35,24 @@ describe('toolbox list', () => {
     expect(data.count).toBe(3);
   });
 
-  it('hides tools with isHidden', async () => {
-    const tb = new Toolbox([
-      makeTool({ name: 'visible_tool' }),
-      makeTool({ name: 'hidden_tool', isHidden: true }),
-    ]);
+  it('hides tools with isHidden in json format', async () => {
+    const tb = new Toolbox(
+      [makeTool({ name: 'visible_tool' }), makeTool({ name: 'hidden_tool', isHidden: true })],
+      { schemaFormat: 'json' },
+    );
 
     const result = await tb.handle('list', {});
     const data = result.data as Record<string, unknown>;
     const tools = data.tools as Array<{ name: string }>;
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('visible_tool');
-    expect(tools.find((t: { name: string }) => t.name === 'hidden_tool')).toBeUndefined();
   });
 
-  it('includes descriptions', async () => {
-    const tb = new Toolbox([
-      makeTool({ name: 'describe_me', description: 'Does something useful' }),
-    ]);
+  it('includes descriptions in json format', async () => {
+    const tb = new Toolbox(
+      [makeTool({ name: 'describe_me', description: 'Does something useful' })],
+      { schemaFormat: 'json' },
+    );
 
     const result = await tb.handle('list', {});
     const data = result.data as Record<string, unknown>;
@@ -61,8 +60,8 @@ describe('toolbox list', () => {
     expect(tools[0].description).toMatch(/useful/);
   });
 
-  it('default detail is params', async () => {
-    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+  it('default detail is params in json format', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })], { schemaFormat: 'json' });
     const result = await tb.handle('list', {});
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
@@ -71,44 +70,41 @@ describe('toolbox list', () => {
   });
 
   it('detail=names returns name and description only', async () => {
-    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })], { schemaFormat: 'json' });
     const result = await tb.handle('list', { detail: 'names' });
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
     expect(tool.params).toBeUndefined();
     expect(tool.schema).toBeUndefined();
-    expect(tool.schema_md).toBeUndefined();
-    expect(tool.schema_csv).toBeUndefined();
   });
 
-  it('detail=json includes schema field', async () => {
-    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
-    const result = await tb.handle('list', { detail: 'json' });
+  it('detail=schema includes schema field', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })], { schemaFormat: 'json' });
+    const result = await tb.handle('list', { detail: 'schema' });
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
     expect(tool.schema).toBeDefined();
   });
 
-  it('detail=markdown includes schema_md field', async () => {
+  it('default format is markdown (string output)', async () => {
     const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
-    const result = await tb.handle('list', { detail: 'markdown' });
-    const data = result.data as Record<string, unknown>;
-    const tool = (data.tools as Record<string, unknown>[])[0];
-    expect(tool.schema_md).toBeDefined();
-    expect(tool.schema_md).not.toBe('');
+    const result = await tb.handle('list', {});
+    expect(result.success).toBe(true);
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/test_tool/);
   });
 
-  it('detail=csv includes schema_csv field', async () => {
-    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
-    const result = await tb.handle('list', { detail: 'csv' });
-    const data = result.data as Record<string, unknown>;
-    const tool = (data.tools as Record<string, unknown>[])[0];
-    expect(tool.schema_csv).toBeDefined();
-    expect(tool.schema_csv).not.toBe('');
+  it('schemaFormat=csv returns raw CSV with type hints', async () => {
+    const tb = new Toolbox([makeTool({ name: 'csv_tool' })], { schemaFormat: 'csv' });
+    const result = await tb.handle('list', {});
+    expect(result.success).toBe(true);
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/csv_tool/);
+    expect((result.data as string)).toMatch(/name \(string\)/);
   });
 
   it('detail=params explicit includes params field', async () => {
-    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })], { schemaFormat: 'json' });
     const result = await tb.handle('list', { detail: 'params' });
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
@@ -124,67 +120,80 @@ describe('toolbox list', () => {
   });
 
   it('params for tool with empty schema is empty string', async () => {
-    const tb = new Toolbox([
-      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
-    ]);
+    const tb = new Toolbox(
+      [{ name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) }],
+      { schemaFormat: 'json' },
+    );
     const result = await tb.handle('list', {});
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
     expect(tool.params).toBe('');
   });
 
-  it('json for tool with empty schema is {}', async () => {
-    const tb = new Toolbox([
-      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
-    ]);
-    const result = await tb.handle('list', { detail: 'json' });
+  it('schema for tool with empty schema is {}', async () => {
+    const tb = new Toolbox(
+      [{ name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) }],
+      { schemaFormat: 'json' },
+    );
+    const result = await tb.handle('list', { detail: 'schema' });
     const data = result.data as Record<string, unknown>;
     const tool = (data.tools as Record<string, unknown>[])[0];
     expect(tool.schema).toEqual({});
   });
 
-  it('markdown for tool with empty schema is empty string', async () => {
-    const tb = new Toolbox([
-      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
-    ]);
-    const result = await tb.handle('list', { detail: 'markdown' });
-    const data = result.data as Record<string, unknown>;
-    const tool = (data.tools as Record<string, unknown>[])[0];
-    expect(tool.schema_md).toBe('');
+  it('markdown format works for tool with empty schema', async () => {
+    const tb = new Toolbox(
+      [{ name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) }],
+    );
+    const result = await tb.handle('list', {});
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/empty/);
   });
 
-  it('csv for tool with empty schema is empty string', async () => {
-    const tb = new Toolbox([
-      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
-    ]);
-    const result = await tb.handle('list', { detail: 'csv' });
-    const data = result.data as Record<string, unknown>;
-    const tool = (data.tools as Record<string, unknown>[])[0];
-    expect(tool.schema_csv).toBe('');
+  it('csv format works for tool with empty schema', async () => {
+    const tb = new Toolbox(
+      [{ name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) }],
+      { schemaFormat: 'csv' },
+    );
+    const result = await tb.handle('list', {});
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/empty/);
   });
 });
 
 // ── explain command (fixtures/explain.json) ────────────────────────
 
 describe('toolbox explain', () => {
-  it('returns schema for named tools', async () => {
-    const tb = new Toolbox([
-      makeTool({ name: 'tool_a' }),
-      makeTool({ name: 'tool_b' }),
-    ]);
-
+  it('returns markdown string by default', async () => {
+    const tb = new Toolbox([makeTool({ name: 'tool_a' }), makeTool({ name: 'tool_b' })]);
     const result = await tb.handle('explain', { toolNames: ['tool_a', 'tool_b'] });
+    expect(result.success).toBe(true);
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/tool_a/);
+    expect((result.data as string)).toMatch(/tool_b/);
+  });
+
+  it('format=json returns structured data', async () => {
+    const tb = new Toolbox([makeTool({ name: 'tool_a' })]);
+    const result = await tb.handle('explain', { toolNames: ['tool_a'], format: 'json' });
     expect(result.success).toBe(true);
     const data = result.data as Record<string, unknown>;
     const exps = data.explanations as Record<string, Record<string, unknown>>;
-    expect(exps.tool_a.description).toBeTruthy();
-    expect(exps.tool_a.markdown).toBeTruthy();
-    expect(exps.tool_b.markdown).toBeTruthy();
+    expect(exps.tool_a.schema).toBeDefined();
+    expect(exps.tool_a.description).toBeDefined();
   });
 
-  it('reports not_found for missing tools', async () => {
+  it('reports not_found as text in default markdown', async () => {
     const tb = new Toolbox([makeTool({ name: 'tool_a' })]);
+    const result = await tb.handle('explain', { toolNames: ['tool_a', 'ghost'] });
+    expect(result.success).toBe(true);
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/tool_a/);
+    expect((result.data as string)).toMatch(/Not found/);
+  });
 
+  it('reports not_found in json format', async () => {
+    const tb = new Toolbox([makeTool({ name: 'tool_a' })], { schemaFormat: 'json' });
     const result = await tb.handle('explain', { toolNames: ['tool_a', 'ghost'] });
     expect(result.success).toBe(true);
     const data = result.data as Record<string, unknown>;
@@ -195,7 +204,6 @@ describe('toolbox explain', () => {
 
   it('fails when no toolNames provided', async () => {
     const tb = new Toolbox([makeTool({ name: 'tool_a' })]);
-
     const result = await tb.handle('explain', { toolNames: [] });
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -203,25 +211,22 @@ describe('toolbox explain', () => {
 
   it('fails when all tools not found', async () => {
     const tb = new Toolbox([makeTool({ name: 'tool_a' })]);
-
     const result = await tb.handle('explain', { toolNames: ['ghost1', 'ghost2'] });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/ghost1|ghost2/);
   });
 
-  it('returns markdown when schemaFormat=markdown (opt-in)', async () => {
+  it('csv format returns raw CSV', async () => {
     const tb = new Toolbox(
-      [makeTool({ name: 'md_tool', description: 'Markdown test' })],
-      { schemaFormat: 'markdown' },
+      [makeTool({ name: 'csv_tool', description: 'CSV test' })],
+      { schemaFormat: 'csv' },
     );
-
-    const result = await tb.handle('explain', { toolNames: ['md_tool'] });
+    const result = await tb.handle('explain', { toolNames: ['csv_tool'] });
     expect(result.success).toBe(true);
-    const data = result.data as Record<string, unknown>;
-    const exps = data.explanations as Record<string, Record<string, unknown>>;
-    expect(exps.md_tool.markdown).toBeTruthy();
-    expect((exps.md_tool.markdown as string)).toMatch(/md_tool/);
-    expect((exps.md_tool.markdown as string)).toMatch(/message/);
+    expect(typeof result.data).toBe('string');
+    expect((result.data as string)).toMatch(/csv_tool/);
+    expect((result.data as string)).toMatch(/message/);
+    expect((result.data as string)).toMatch(/string/);
   });
 
   it('per-call format=json overrides markdown default', async () => {
@@ -229,13 +234,10 @@ describe('toolbox explain', () => {
       [makeTool({ name: 'test_tool' })],
       { schemaFormat: 'markdown' },
     );
-
     const result = await tb.handle('explain', { toolNames: ['test_tool'], format: 'json' });
     const data = result.data as Record<string, unknown>;
     const exps = data.explanations as Record<string, Record<string, unknown>>;
-    // Should be raw schema, not markdown
     expect(exps.test_tool.schema).toBeDefined();
-    expect(exps.test_tool.markdown).toBeUndefined();
   });
 });
 
@@ -264,7 +266,6 @@ describe('toolbox run', () => {
 
   it('requires toolName', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', { subject: 'No tool name provided' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/toolName/i);
@@ -272,7 +273,6 @@ describe('toolbox run', () => {
 
   it('requires subject', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', { toolName: 'echo_tool' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/subject/i);
@@ -280,7 +280,6 @@ describe('toolbox run', () => {
 
   it('unknown tool returns error', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', {
       toolName: 'ghost_tool',
       subject: 'Trying ghost tool',
@@ -353,7 +352,6 @@ describe('toolbox hints', () => {
       args: { method: 'CREATE', category: 'tool', key: 'dedup', hint: 'Second' },
     });
     const secondData = (second.data as Record<string, unknown>).hint as Record<string, unknown>;
-    // Same id, hint still "First"
     expect(secondData.id).toBe(firstId);
     expect(secondData.hint).toBe('First');
   });
@@ -428,7 +426,6 @@ describe('toolbox hints', () => {
 describe('error responses', () => {
   it('unknown command', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('nonexistent' as string, {});
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -436,7 +433,6 @@ describe('error responses', () => {
 
   it('run without toolName', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', { subject: 'Missing tool name' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/toolName/i);
@@ -444,7 +440,6 @@ describe('error responses', () => {
 
   it('run without subject', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', { toolName: 'some_tool' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/subject/i);
@@ -452,7 +447,6 @@ describe('error responses', () => {
 
   it('explain with no tool names', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('explain', { toolNames: [] });
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -460,7 +454,6 @@ describe('error responses', () => {
 
   it('unknown tool for run', async () => {
     const tb = new Toolbox([makeTool({ name: 'echo_tool' })]);
-
     const result = await tb.handle('run', {
       toolName: 'ghost_123',
       subject: 'testing',
@@ -528,7 +521,6 @@ describe('MCP registry', () => {
     }
 
     registry.registerServer(new StockServer());
-
     const tb = new Toolbox([], { mcpRegistry: registry });
 
     const result = await tb.handle('list', { mcp: 'stocks' });
@@ -561,7 +553,6 @@ describe('MCP registry', () => {
     }
 
     registry.registerServer(new MyServer());
-
     const tb = new Toolbox([], { mcpRegistry: registry });
 
     const result = await tb.handle('explain', { toolNames: ['tool_x'], mcp: 'my' });
@@ -586,7 +577,6 @@ describe('MCP registry', () => {
     }
 
     registry.registerServer(new ExecServer());
-
     const tb = new Toolbox([], { mcpRegistry: registry });
 
     const result = await tb.handle('run', {
@@ -620,7 +610,6 @@ describe('MCP registry', () => {
 
     registry.registerServer(new ServerA());
     registry.registerServer(new ServerB());
-
     const tb = new Toolbox([], { mcpRegistry: registry });
 
     const result = await tb.handle('servers', {});
@@ -628,14 +617,12 @@ describe('MCP registry', () => {
     const data = result.data as Record<string, unknown>;
     expect(data.count).toBe(2);
     const servers = data.servers as Array<{ id: string }>;
-    // Sorted by priority descending
     expect(servers[0].id).toBe('a');
     expect(servers[1].id).toBe('b');
   });
 
   it('servers without MCP registry returns error', async () => {
     const tb = new Toolbox([]);
-
     const result = await tb.handle('servers', {});
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/No MCP registry/);
@@ -696,8 +683,6 @@ describe('schema formatting', () => {
   });
 
   it('schemaToCsv returns compact CSV header', async () => {
-    const tb = new Toolbox([], { schemaFormat: 'markdown' });
-    // schemaFormat only affects explain output; schemaToCsv is separate
     const { schemaToCsv } = await import('../src/schema.js');
     const csv = schemaToCsv({
       type: 'object',

@@ -174,15 +174,19 @@ class Toolbox:
                 "CLI-style gateway for all tools.\n\n"
                 "Commands:\n"
                 "- list: Show all available tools with descriptions "
-                "(use --mcp=serverId for MCP tools, "
-                "--detail=params|names|json|markdown|csv for detail level)\n"
+                "(use --mcp=serverId for MCP tools, --detail=names|params|schema "
+                "to control which fields each tool entry includes)\n"
                 "- explain: Get schema docs for one or more tools "
-                "(provide toolNames, use --mcp=serverId for MCP tools)\n"
+                "(provide toolNames, use --mcp=serverId for MCP tools, "
+                "--format=json to force raw JSON Schema)\n"
                 "- run: Execute a tool (requires toolName and subject, "
                 "use --mcp=serverId for MCP tools)\n"
                 "- servers: List available MCP servers and their descriptions\n"
                 "- hints: Manage universal hints for tool usage, gotchas, "
                 "and MCP shortcuts (method: READ|CREATE|UPDATE|DELETE)\n\n"
+                "The host controls the response format for list and explain via "
+                "schema_format: 'json' (plain JSON), 'markdown' (fenced CSV/docs), "
+                "or 'csv' (raw CSV with type hints). Default is 'markdown'.\n\n"
                 "Always provide a \"subject\" when using \"run\" to explain your intent."
             ),
             "parameters": {
@@ -195,16 +199,22 @@ class Toolbox:
                     },
                     "detail": {
                         "type": "string",
-                        "enum": ["params", "names", "json", "markdown", "csv"],
+                        "enum": ["names", "params", "schema"],
                         "description": (
-                            "Detail level for list command: params (default), "
-                            "names, json, markdown, csv"
+                            "Per-entry fields for list: names (name+desc only), "
+                            "params (add compact param hints, default), "
+                            "schema (add full JSON Schema)"
                         ),
                     },
                     "toolNames": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Tools to explain (for explain command, accepts multiple)",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["json"],
+                        "description": "Force JSON output for explain, overriding schema_format",
                     },
                     "toolName": {
                         "type": "string",
@@ -273,49 +283,91 @@ class Toolbox:
 
     # ── List ──────────────────────────────────────────────────────────
 
-    def _handle_list(self, *, detail: str | None = None, mcp: str | None = None, **_: Any) -> ToolResult:
-        valid_details = {"params", "names", "json", "markdown", "csv"}
+    def _handle_list(
+        self,
+        *,
+        detail: str | None = None,
+        mcp: str | None = None,
+        **_: Any,
+    ) -> ToolResult:
+        """Return the tool list in the host-configured schema_format.
+
+        ``detail`` (LLM-controlled, default "params") controls which fields
+        each tool entry includes:
+
+        - ``"names"`` — just name + description
+        - ``"params"`` (default) — name + description + compact param hint
+        - ``"schema"`` — name + description + raw JSON Schema
+
+        ``schema_format`` (host-configured at construction) controls the
+        response envelope:
+
+        - ``"json"`` — plain JSON dict: ``{"tools": [...], "count": N}``
+        - ``"markdown"`` — fenced CSV table (just the text, no JSON wrapper)
+        - ``"csv"`` — raw CSV with type-hinted header (just the text)
+        """
+        valid_details = {"names", "params", "schema"}
         if detail is not None and detail not in valid_details:
             return ToolResult(
                 success=False,
                 error=f"Invalid detail level: {detail}. Valid options: {', '.join(sorted(valid_details))}",
             )
-
         detail = detail or "params"
 
         if mcp:
             return self._list_mcp_tools(mcp, detail=detail)
 
-        visible = [(name, t) for name, t in self._tools.items() if not t.is_hidden]
+        # Build the per-entry rows based on detail level
+        rows = self._build_list_rows(detail)
 
-        # ── Text formats: return only the rendered string ────────────
-        if detail == "markdown":
+        # Wrap in the host-configured schema_format envelope
+        if self._schema_format == "markdown":
             from .schema import data_to_csv
-            rows = [{"name": name, "description": t.description} for name, t in visible]
-            text = data_to_csv(rows, columns=["name", "description"], fence_block="Available Tools")
-            return ToolResult(success=True, data={"markdown": text, "count": len(rows)})
+            columns = self._list_columns(detail)
+            text = data_to_csv(
+                rows,
+                columns=columns,
+                fence_block="Available Tools",
+            )
+            return ToolResult(success=True, data=text)
 
-        if detail == "csv":
-            from .schema import data_to_csv
-            rows = [{"name": name, "description": t.description} for name, t in visible]
-            text = data_to_csv(rows, columns=["name", "description"], fence_block="Available Tools")
-            return ToolResult(success=True, data={"csv": text, "count": len(rows)})
+        if self._schema_format == "csv":
+            from .schema import data_to_csv_with_type_hints
+            columns = self._list_columns(detail)
+            text = data_to_csv_with_type_hints(
+                rows,
+                columns=columns,
+                comment="Available Tools",
+            )
+            return ToolResult(success=True, data=text)
 
-        # ── Structured formats: return JSON tools array ──────────────
-        tools = []
-        for name, t in visible:
+        # schema_format == "json" (or any unrecognized value falls through to JSON)
+        return ToolResult(success=True, data={"tools": rows, "count": len(rows)})
+
+    def _build_list_rows(self, detail: str) -> list[dict[str, Any]]:
+        """Build the per-entry dicts for a list response."""
+        from .schema import schema_to_compact_params
+        rows: list[dict[str, Any]] = []
+        for name, t in self._tools.items():
+            if t.is_hidden:
+                continue
             entry: dict[str, Any] = {"name": name, "description": t.description}
-
-            if detail == "params":
-                from .schema import schema_to_compact_params
-                entry["params"] = schema_to_compact_params(t.schema)
-            elif detail == "json":
+            if detail == "schema":
                 entry["schema"] = t.schema
+            elif detail == "params":
+                entry["params"] = schema_to_compact_params(t.schema)
             # detail == "names": just name + description
+            rows.append(entry)
+        return rows
 
-            tools.append(entry)
-
-        return ToolResult(success=True, data={"tools": tools, "count": len(tools)})
+    @staticmethod
+    def _list_columns(detail: str) -> list[str]:
+        """Return the column order for tabular (markdown/csv) list output."""
+        if detail == "schema":
+            return ["name", "description", "schema"]
+        if detail == "params":
+            return ["name", "description", "params"]
+        return ["name", "description"]
 
     def _list_mcp_tools(self, server_id: str, detail: str = "params") -> ToolResult:
         if not self._mcp_registry:
@@ -336,34 +388,56 @@ class Toolbox:
 
     # ── Explain ───────────────────────────────────────────────────────
 
-    def _handle_explain(self, *, toolNames: list[str] | None = None, format: str | None = None, mcp: str | None = None, **_: Any) -> ToolResult:
+    def _handle_explain(
+        self,
+        *,
+        toolNames: list[str] | None = None,
+        format: str | None = None,
+        mcp: str | None = None,
+        **_: Any,
+    ) -> ToolResult:
+        """Return schema details for one or more tools.
+
+        ``format`` (LLM-controlled, ``"json"``) overrides the host's
+        ``schema_format`` to force raw JSON Schema output.
+
+        Response envelope depends on ``schema_format`` (or ``format``
+        override):
+
+        - ``"json"`` — ``{"explanations": {name: {description, schema}}}``
+        - ``"markdown"`` — raw markdown docs (one per tool, no wrapper)
+        - ``"csv"`` — raw CSV parameter tables (one per tool, no wrapper)
+        """
         names = toolNames or []
         if not names:
-            return ToolResult(success=False, error="explain requires at least one tool name in toolNames")
+            return ToolResult(
+                success=False,
+                error="explain requires at least one tool name in toolNames",
+            )
 
         if mcp:
             return self._explain_mcp_tools(names, mcp)
 
         # Per-call format override: 'json' forces raw schema regardless of default
-        use_markdown = self._schema_format == "markdown" and format != "json"
+        effective_format = "json" if format == "json" else self._schema_format
 
-        explanations = {}
-        not_found = []
+        explanations: dict[str, str | dict[str, Any]] = {}
+        not_found: list[str] = []
 
         for name in names:
             tool = self._tools.get(name)
             if tool:
-                if use_markdown:
+                if effective_format == "markdown":
                     from .schema import schema_to_markdown
-
-                    md = schema_to_markdown(
+                    explanations[name] = schema_to_markdown(
                         tool.schema,
                         title=name,
                         description=tool.description,
                     )
-                    explanations[name] = md
+                elif effective_format == "csv":
+                    from .schema import schema_to_csv
+                    explanations[name] = schema_to_csv(tool.schema, comment=name)
                 else:
-                    # JSON format: raw schema dict per tool
                     explanations[name] = {
                         "description": tool.description,
                         "schema": tool.schema,
@@ -371,13 +445,23 @@ class Toolbox:
             else:
                 not_found.append(name)
 
+        if not explanations:
+            return ToolResult(
+                success=False,
+                error=f"Tools not found: {', '.join(not_found)}",
+            )
+
+        if effective_format in ("markdown", "csv"):
+            sep = "\n\n" if effective_format == "markdown" else "\n"
+            text = sep.join(explanations.values())
+            if not_found:
+                text += f"\n\n# Not found: {', '.join(not_found)}"
+            return ToolResult(success=True, data=text)
+
+        # JSON envelope
         result_data: dict[str, Any] = {"explanations": explanations}
         if not_found:
             result_data["not_found"] = not_found
-
-        if not explanations:
-            return ToolResult(success=False, error=f"Tools not found: {', '.join(not_found)}")
-
         return ToolResult(success=True, data=result_data)
 
     def _explain_mcp_tools(self, names: list[str], server_id: str) -> ToolResult:

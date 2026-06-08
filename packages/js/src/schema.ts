@@ -322,6 +322,48 @@ export function dataToCsv(
   return csvText;
 }
 
+export function dataToCsvWithTypeHints(
+  data: Record<string, unknown>[],
+  opts?: {
+    columns?: string[];
+    comment?: string;
+  },
+): string {
+  /** Convert a list of objects to CSV with type hints. */
+  if (data.length === 0) return "";
+
+  let columns = opts?.columns;
+  if (!columns) {
+    const seen: string[] = [];
+    for (const row of data) {
+      for (const key of Object.keys(row)) {
+        if (!seen.includes(key)) seen.push(key);
+      }
+    }
+    columns = seen;
+  }
+
+  const columnTypeHints: Record<string, string> = {
+    name: "string",
+    description: "string",
+    params: "string",
+    schema: "object",
+  };
+
+  const hintParts = columns.map((col) => `${col} (${columnTypeHints[col] ?? "string"})`);
+  const commentLine = opts?.comment ? `# ${opts.comment}: ` : "# ";
+  const lines: string[] = [`${commentLine}${hintParts.join(", ")}`];
+
+  lines.push(columns.join(","));
+
+  for (const row of data) {
+    const values = columns.map((col) => escapeCsvField(row[col] ?? ""));
+    lines.push(values.join(","));
+  }
+
+  return lines.join("\n");
+}
+
 // ── Internal helpers ────────────────────────────────────────────────
 
 function resolveRef(schema: JsonSchema): JsonSchema {

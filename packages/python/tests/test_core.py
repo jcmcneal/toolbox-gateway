@@ -23,8 +23,14 @@ def make_tool(name: str, desc: str = "A test tool") -> Tool:
     )
 
 
-def make_toolbox(n_tools: int = 3) -> Toolbox:
+def make_toolbox(n_tools: int = 3, schema_format: str = "json") -> Toolbox:
     """Create a toolbox with n simple echo tools."""
+    tools = [make_tool(f"tool_{i}", f"Tool number {i}") for i in range(n_tools)]
+    return Toolbox(tools=tools, hint_store=MemoryHintStore(), schema_format=schema_format)
+
+
+def make_toolbox_md(n_tools: int = 3) -> Toolbox:
+    """Create a toolbox with default markdown schema_format."""
     tools = [make_tool(f"tool_{i}", f"Tool number {i}") for i in range(n_tools)]
     return Toolbox(tools=tools, hint_store=MemoryHintStore())
 
@@ -72,7 +78,8 @@ class TestToolDefinition:
 
 class TestListCommand:
     def test_list_returns_all_visible_tools(self):
-        tb = make_toolbox(3)
+        """JSON format returns tools array with all visible tools."""
+        tb = make_toolbox(3, schema_format="json")
         result = tb.handle(command="list")
 
         assert result.success
@@ -83,11 +90,12 @@ class TestListCommand:
         assert "tool_2" in names
 
     def test_list_hides_hidden_tools(self):
+        """Hidden tools are excluded from list output."""
         tools = [
             make_tool("visible"),
             Tool(name="secret", description="Hidden", schema={}, execute=lambda _: None, is_hidden=True),
         ]
-        tb = Toolbox(tools=tools, hint_store=MemoryHintStore())
+        tb = Toolbox(tools=tools, hint_store=MemoryHintStore(), schema_format="json")
         result = tb.handle(command="list")
 
         assert result.success
@@ -95,14 +103,14 @@ class TestListCommand:
         assert result.data["tools"][0]["name"] == "visible"
 
     def test_list_includes_descriptions(self):
-        tb = make_toolbox(1)
+        tb = make_toolbox(1, schema_format="json")
         result = tb.handle(command="list")
 
         assert result.data["tools"][0]["description"] == "Tool number 0"
 
     def test_list_default_detail_is_params(self):
         """list with no detail param returns params field per tool."""
-        tb = make_toolbox(1)
+        tb = make_toolbox(1, schema_format="json")
         result = tb.handle(command="list")
 
         assert "params" in result.data["tools"][0]
@@ -110,45 +118,47 @@ class TestListCommand:
 
     def test_list_detail_names(self):
         """detail=names returns only name and description."""
-        tb = make_toolbox(1)
+        tb = make_toolbox(1, schema_format="json")
         result = tb.handle(command="list", detail="names")
 
         assert "params" not in result.data["tools"][0]
         assert "schema" not in result.data["tools"][0]
-        assert "schema_md" not in result.data["tools"][0]
-        assert "schema_csv" not in result.data["tools"][0]
 
-    def test_list_detail_json(self):
-        """detail=json includes full schema per tool."""
-        tb = make_toolbox(1)
-        result = tb.handle(command="list", detail="json")
+    def test_list_detail_schema(self):
+        """detail=schema includes full JSON Schema per tool."""
+        tb = make_toolbox(1, schema_format="json")
+        result = tb.handle(command="list", detail="schema")
 
         assert "schema" in result.data["tools"][0]
         assert result.data["tools"][0]["schema"] != {}
 
-    def test_list_detail_markdown(self):
-        """detail=markdown returns markdown table, not tools array."""
-        tb = make_toolbox(1)
-        result = tb.handle(command="list", detail="markdown")
+    def test_list_default_format_is_markdown(self):
+        """Default output is markdown CSV table (not JSON dict)."""
+        tb = make_toolbox_md(3)
+        result = tb.handle(command="list")
 
-        assert "markdown" in result.data
-        assert "tools" not in result.data
-        assert result.data["count"] == 1
-        assert "tool_0" in result.data["markdown"]
+        assert result.success
+        assert isinstance(result.data, str)
+        assert "tool_0" in result.data
+        assert "tool_1" in result.data
+        assert "tool_2" in result.data
+        assert "Available Tools" in result.data
 
-    def test_list_detail_csv(self):
-        """detail=csv returns csv text, not tools array."""
-        tb = make_toolbox(1)
-        result = tb.handle(command="list", detail="csv")
+    def test_list_csv_format(self):
+        """schema_format=csv returns raw CSV with type hints."""
+        tool = Tool(name="test_tool", description="A test tool", schema={}, execute=lambda _: None)
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore(), schema_format="csv")
+        result = tb.handle(command="list")
 
-        assert "csv" in result.data
-        assert "tools" not in result.data
-        assert result.data["count"] == 1
-        assert "tool_0" in result.data["csv"]
+        assert result.success
+        assert isinstance(result.data, str)
+        assert "test_tool" in result.data
+        assert "name (string)" in result.data
+        assert "description (string)" in result.data
 
     def test_list_detail_params_explicit(self):
         """detail=params is the same as default."""
-        tb = make_toolbox(1)
+        tb = make_toolbox(1, schema_format="json")
         result = tb.handle(command="list", detail="params")
 
         assert "params" in result.data["tools"][0]
@@ -164,16 +174,16 @@ class TestListCommand:
     def test_list_params_for_tool_with_empty_schema(self):
         """Tools with empty schema get empty string for params."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
-        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore(), schema_format="json")
         result = tb.handle(command="list")
 
         assert result.data["tools"][0]["params"] == ""
 
-    def test_list_json_for_tool_with_empty_schema(self):
+    def test_list_schema_for_tool_with_empty_schema(self):
         """Tools with empty schema get {} for schema field."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
-        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
-        result = tb.handle(command="list", detail="json")
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore(), schema_format="json")
+        result = tb.handle(command="list", detail="schema")
 
         assert result.data["tools"][0]["schema"] == {}
 
@@ -181,41 +191,64 @@ class TestListCommand:
         """Tools with empty schema still appear in markdown table."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
         tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
-        result = tb.handle(command="list", detail="markdown")
+        result = tb.handle(command="list")
 
-        assert "markdown" in result.data
-        assert result.data["count"] == 1
-        assert "empty" in result.data["markdown"]
+        assert isinstance(result.data, str)
+        assert "empty" in result.data
+        assert "Empty schema" in result.data
 
     def test_list_csv_for_tool_with_empty_schema(self):
         """Tools with empty schema still appear in csv output."""
         tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
-        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
-        result = tb.handle(command="list", detail="csv")
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore(), schema_format="csv")
+        result = tb.handle(command="list")
 
-        assert "csv" in result.data
-        assert result.data["count"] == 1
-        assert "empty" in result.data["csv"]
+        assert isinstance(result.data, str)
+        assert "empty" in result.data
 
 
 # ── Explain Command ──────────────────────────────────────────────────
 
 class TestExplainCommand:
-    def test_explain_returns_schema_for_named_tools(self):
-        tb = make_toolbox(3)
+    def test_explain_returns_string_for_default_markdown(self):
+        """Default markdown format returns string with tool docs."""
+        tb = make_toolbox_md(3)
         result = tb.handle(command="explain", toolNames=["tool_0", "tool_2"])
 
         assert result.success
+        assert isinstance(result.data, str)
+        assert "tool_0" in result.data
+        assert "tool_2" in result.data
+
+    def test_explain_json_format(self):
+        """format=json forces JSON output regardless of schema_format."""
+        tb = make_toolbox_md(3)
+        result = tb.handle(command="explain", toolNames=["tool_0", "tool_2"], format="json")
+
+        assert result.success
+        assert isinstance(result.data, dict)
         assert "tool_0" in result.data["explanations"]
         assert "tool_2" in result.data["explanations"]
-        assert result.data["explanations"]["tool_0"]  # non-empty string
-        assert "tool_0" in result.data["explanations"]["tool_0"]
+        assert "schema" in result.data["explanations"]["tool_0"]
 
-    def test_explain_reports_not_found(self):
-        tb = make_toolbox(2)
+    def test_explain_reports_not_found_in_markdown(self):
+        """Not-found tools are listed in the markdown output body."""
+        tb = make_toolbox_md(2)
         result = tb.handle(command="explain", toolNames=["tool_0", "nonexistent"])
 
         assert result.success
+        assert isinstance(result.data, str)
+        assert "tool_0" in result.data
+        assert "Not found" in result.data
+        assert "nonexistent" in result.data
+
+    def test_explain_reports_not_found_in_json(self):
+        """Not-found tools are listed in not_found array for JSON output."""
+        tb = make_toolbox(2, schema_format="json")
+        result = tb.handle(command="explain", toolNames=["tool_0", "nonexistent"])
+
+        assert result.success
+        assert isinstance(result.data, dict)
         assert "tool_0" in result.data["explanations"]
         assert "nonexistent" in result.data["not_found"]
 
@@ -232,6 +265,17 @@ class TestExplainCommand:
 
         assert not result.success
         assert "ghost_tool" in result.error
+
+    def test_explain_csv_format(self):
+        """schema_format=csv returns raw CSV per tool."""
+        tb = make_toolbox(2, schema_format="csv")
+        result = tb.handle(command="explain", toolNames=["tool_0"])
+
+        assert result.success
+        assert isinstance(result.data, str)
+        assert "tool_0" in result.data
+        assert "input" in result.data  # CSV header contains field name
+        assert "string" in result.data  # Type hint in comment
 
 
 # ── Run Command ─────────────────────────────────────────────────────

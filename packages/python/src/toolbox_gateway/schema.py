@@ -326,6 +326,65 @@ def data_to_csv(
     return csv_text
 
 
+def data_to_csv_with_type_hints(
+    data: list[dict[str, Any]],
+    *,
+    columns: list[str] | None = None,
+    comment: str | None = None,
+) -> str:
+    """Convert a list of dicts to CSV with a type-hinted comment line.
+
+    Produces output like::
+
+        # Available Tools: name (string), description (string)
+        name,description
+        web_search,Search the web for info.
+
+    Args:
+        data: List of row dicts.
+        columns: Optional column order. Auto-detected from data if omitted.
+        comment: Optional label for the comment line.
+
+    Returns:
+        CSV string with type hints.
+    """
+    if not data:
+        return ""
+
+    # Determine columns
+    if not columns:
+        seen: list[str] = []
+        for row in data:
+            for key in row:
+                if key not in seen:
+                    seen.append(key)
+        columns = seen
+
+    # Build type hints for each column
+    column_type_hints: dict[str, str] = {
+        "name": "string",
+        "description": "string",
+        "params": "string",
+        "schema": "object",
+    }
+
+    hint_parts = [
+        f"{col} ({column_type_hints.get(col, 'string')})"
+        for col in columns
+    ]
+    comment_line = f"# {comment}: " if comment else "# "
+    lines: list[str] = [f"{comment_line}{', '.join(hint_parts)}"]
+
+    # Header row
+    lines.append(",".join(columns))
+
+    for row in data:
+        values = [_escape_csv_field(row.get(col, "")) for col in columns]
+        lines.append(",".join(values))
+
+    return "\n".join(lines)
+
+
 # ── Internal helpers ──────────────────────────────────────────────────
 
 def _resolve_ref(schema: dict[str, Any]) -> dict[str, Any]:
