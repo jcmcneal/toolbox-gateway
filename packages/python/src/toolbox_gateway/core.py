@@ -174,7 +174,8 @@ class Toolbox:
                 "CLI-style gateway for all tools.\n\n"
                 "Commands:\n"
                 "- list: Show all available tools with descriptions "
-                "(use --mcp=serverId for MCP tools)\n"
+                "(use --mcp=serverId for MCP tools, "
+                "--detail=params|names|json|markdown|csv for detail level)\n"
                 "- explain: Get schema docs for one or more tools "
                 "(provide toolNames, use --mcp=serverId for MCP tools)\n"
                 "- run: Execute a tool (requires toolName and subject, "
@@ -191,6 +192,14 @@ class Toolbox:
                         "type": "string",
                         "enum": ["list", "explain", "run", "servers", "hints"],
                         "description": "list | explain | run | servers | hints",
+                    },
+                    "detail": {
+                        "type": "string",
+                        "enum": ["params", "names", "json", "markdown", "csv"],
+                        "description": (
+                            "Detail level for list command: params (default), "
+                            "names, json, markdown, csv"
+                        ),
                     },
                     "toolNames": {
                         "type": "array",
@@ -264,27 +273,55 @@ class Toolbox:
 
     # ── List ──────────────────────────────────────────────────────────
 
-    def _handle_list(self, *, mcp: str | None = None, **_: Any) -> ToolResult:
+    def _handle_list(self, *, detail: str | None = None, mcp: str | None = None, **_: Any) -> ToolResult:
+        valid_details = {"params", "names", "json", "markdown", "csv"}
+        if detail is not None and detail not in valid_details:
+            return ToolResult(
+                success=False,
+                error=f"Invalid detail level: {detail}. Valid options: {', '.join(sorted(valid_details))}",
+            )
+
+        detail = detail or "params"
+
         if mcp:
-            return self._list_mcp_tools(mcp)
+            return self._list_mcp_tools(mcp, detail=detail)
 
-        tools = [
-            {"name": name, "description": t.description}
-            for name, t in self._tools.items()
-            if not t.is_hidden
-        ]
+        tools = []
+        for name, t in self._tools.items():
+            if t.is_hidden:
+                continue
+            entry: dict[str, Any] = {"name": name, "description": t.description}
 
-        result_data: dict[str, Any] = {"tools": tools, "count": len(tools)}
+            if detail == "names":
+                pass  # just name + description
+            elif detail == "params":
+                from .schema import schema_to_compact_params
+                entry["params"] = schema_to_compact_params(t.schema)
+            elif detail == "json":
+                entry["schema"] = t.schema
+            elif detail == "markdown":
+                if t.schema and t.schema.get("properties"):
+                    from .schema import schema_to_markdown
+                    entry["schema_md"] = schema_to_markdown(
+                        t.schema, title=name, description=t.description,
+                    )
+                else:
+                    entry["schema_md"] = ""
+            elif detail == "csv":
+                if t.schema and t.schema.get("properties"):
+                    from .schema import schema_to_csv
+                    try:
+                        entry["schema_csv"] = schema_to_csv(t.schema, comment=name)
+                    except ValueError:
+                        entry["schema_csv"] = ""
+                else:
+                    entry["schema_csv"] = ""
 
-        if self._schema_format == "markdown":
-            # Opt-in: compact CSV format for tool listing
-            from .schema import data_to_csv
-            csv = data_to_csv(tools, fence_block="Available Tools")
-            result_data["markdown"] = csv
+            tools.append(entry)
 
-        return ToolResult(success=True, data=result_data)
+        return ToolResult(success=True, data={"tools": tools, "count": len(tools)})
 
-    def _list_mcp_tools(self, server_id: str) -> ToolResult:
+    def _list_mcp_tools(self, server_id: str, detail: str = "params") -> ToolResult:
         if not self._mcp_registry:
             return ToolResult(success=False, error="No MCP registry configured")
 

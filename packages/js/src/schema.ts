@@ -3,12 +3,13 @@
  *
  * Opt-in: ``npm install toolbox-gateway`` includes these utilities.
  *
- * This module provides two key utilities:
+ * This module provides three key utilities:
  *
  * 1. ``schemaToCsv`` — Convert a JSON Schema to a compact CSV header with type hints
  * 2. ``schemaToMarkdown`` — Convert a JSON Schema to markdown field documentation
+ * 3. ``schemaToCompactParams`` — Convert a JSON Schema to a compact param hint string
  *
- * Both are designed for the ``toolbox explain`` command to return compact,
+ * All are designed for toolbox commands (``list``, ``explain``) to return compact,
  * LLM-friendly tool documentation instead of raw JSON Schema blobs.
  */
 
@@ -231,6 +232,48 @@ export function schemaToMarkdown(
   }
 
   return lines.join("\n");
+}
+
+// ── Compact Params ─────────────────────────────────────────────────
+
+export function schemaToCompactParams(schema: JsonSchema): string {
+  /** Convert a JSON Schema to a compact parameter hint string.
+   *
+   * Produces output like:
+   *   "query(string), limit(integer)?, offset(integer)?"
+   *
+   * This is the default format for the ``list`` command's ``params`` field.
+   */
+  const resolved = resolveRef(schema);
+
+  let properties: Record<string, JsonSchema> = {};
+  let required: string[] = [];
+
+  if (resolved.type === "array" && resolved.items) {
+    const items = resolved.items as JsonSchema;
+    properties = (items.properties as Record<string, JsonSchema>) ?? {};
+    required = (items.required as string[]) ?? [];
+  } else if (resolved.type === "object") {
+    properties = (resolved.properties as Record<string, JsonSchema>) ?? {};
+    required = (resolved.required as string[]) ?? [];
+  } else if (resolved.properties) {
+    properties = resolved.properties as Record<string, JsonSchema>;
+    required = (resolved.required as string[]) ?? [];
+  }
+
+  const propKeys = Object.keys(properties);
+  if (propKeys.length === 0) return "";
+
+  const parts: string[] = [];
+  for (const fieldName of propKeys) {
+    const fieldSchema = properties[fieldName];
+    const typeHint = getTypeHint(fieldSchema);
+    const isOptional = !required.includes(fieldName);
+    const suffix = isOptional ? "?" : "";
+    parts.push(`${fieldName}(${typeHint})${suffix}`);
+  }
+
+  return parts.join(", ");
 }
 
 // ── JSON to CSV data format ─────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import pytest
 
-from toolbox_gateway.schema import schema_to_csv, schema_to_markdown, data_to_csv
+from toolbox_gateway.schema import schema_to_csv, schema_to_markdown, schema_to_compact_params, data_to_csv
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -148,6 +148,59 @@ class TestSchemaToMarkdown:
         result = schema_to_markdown(NESTED_SCHEMA)
         assert "array(string)" in result
         assert "object(" in result
+
+
+# ── schema_to_compact_params ──────────────────────────────────────────
+
+class TestSchemaToCompactParams:
+    def test_simple_schema(self):
+        result = schema_to_compact_params(SIMPLE_SCHEMA)
+        assert "name(string)" in result
+        assert "age(integer)?" in result
+        assert "role(admin|user)" in result
+
+    def test_required_vs_optional(self):
+        result = schema_to_compact_params(SIMPLE_SCHEMA)
+        # name is required (no ?), role is required (no ?), age is optional (?)
+        assert "name(string)" in result
+        assert "age(integer)?" in result
+        assert "role(admin|user)" in result
+        # required fields don't have ?
+        assert result.count("?") == 1  # only age is optional
+
+    def test_nested_schema(self):
+        result = schema_to_compact_params(NESTED_SCHEMA)
+        assert "symbol(string)" in result
+        assert "limit(integer{range:1-100})?" in result
+        assert "tags(array(string))?" in result
+        assert "metadata(object(" in result
+
+    def test_array_schema(self):
+        result = schema_to_compact_params(ARRAY_SCHEMA)
+        assert "action(BUY|SELL)" in result
+        assert "ticker(string)" in result
+
+    def test_empty_schema(self):
+        result = schema_to_compact_params({})
+        assert result == ""
+
+    def test_no_properties(self):
+        result = schema_to_compact_params({"type": "object"})
+        assert result == ""
+
+    def test_compact_format(self):
+        """Verify the exact shape of the compact params string."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+                "offset": {"type": "integer"},
+            },
+            "required": ["query"],
+        }
+        result = schema_to_compact_params(schema)
+        assert result == "query(string), limit(integer)?, offset(integer)?"
 
 
 # ── data_to_csv ──────────────────────────────────────────────────────

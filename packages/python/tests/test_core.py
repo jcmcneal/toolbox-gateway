@@ -100,6 +100,95 @@ class TestListCommand:
 
         assert result.data["tools"][0]["description"] == "Tool number 0"
 
+    def test_list_default_detail_is_params(self):
+        """list with no detail param returns params field per tool."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list")
+
+        assert "params" in result.data["tools"][0]
+        assert result.data["tools"][0]["params"] != ""
+
+    def test_list_detail_names(self):
+        """detail=names returns only name and description."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="names")
+
+        assert "params" not in result.data["tools"][0]
+        assert "schema" not in result.data["tools"][0]
+        assert "schema_md" not in result.data["tools"][0]
+        assert "schema_csv" not in result.data["tools"][0]
+
+    def test_list_detail_json(self):
+        """detail=json includes full schema per tool."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="json")
+
+        assert "schema" in result.data["tools"][0]
+        assert result.data["tools"][0]["schema"] != {}
+
+    def test_list_detail_markdown(self):
+        """detail=markdown includes schema_md per tool."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="markdown")
+
+        assert "schema_md" in result.data["tools"][0]
+        assert result.data["tools"][0]["schema_md"] != ""
+
+    def test_list_detail_csv(self):
+        """detail=csv includes schema_csv per tool."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="csv")
+
+        assert "schema_csv" in result.data["tools"][0]
+        assert result.data["tools"][0]["schema_csv"] != ""
+
+    def test_list_detail_params_explicit(self):
+        """detail=params is the same as default."""
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="params")
+
+        assert "params" in result.data["tools"][0]
+        assert result.data["tools"][0]["params"] != ""
+
+    def test_list_invalid_detail_returns_error(self):
+        tb = make_toolbox(1)
+        result = tb.handle(command="list", detail="invalid")
+
+        assert not result.success
+        assert "Invalid detail level" in result.error
+
+    def test_list_params_for_tool_with_empty_schema(self):
+        """Tools with empty schema get empty string for params."""
+        tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
+        result = tb.handle(command="list")
+
+        assert result.data["tools"][0]["params"] == ""
+
+    def test_list_json_for_tool_with_empty_schema(self):
+        """Tools with empty schema get {} for schema field."""
+        tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
+        result = tb.handle(command="list", detail="json")
+
+        assert result.data["tools"][0]["schema"] == {}
+
+    def test_list_markdown_for_tool_with_empty_schema(self):
+        """Tools with empty schema get '' for schema_md."""
+        tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
+        result = tb.handle(command="list", detail="markdown")
+
+        assert result.data["tools"][0]["schema_md"] == ""
+
+    def test_list_csv_for_tool_with_empty_schema(self):
+        """Tools with empty schema get '' for schema_csv."""
+        tool = Tool(name="empty", description="Empty schema", schema={}, execute=lambda _: None)
+        tb = Toolbox(tools=[tool], hint_store=MemoryHintStore())
+        result = tb.handle(command="list", detail="csv")
+
+        assert result.data["tools"][0]["schema_csv"] == ""
+
 
 # ── Explain Command ──────────────────────────────────────────────────
 

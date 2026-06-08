@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Toolbox, MemoryHintStore, ToolInput, MCPRegistry, MCPServerInfo } from '../src/index.js';
+import { Toolbox, MemoryHintStore, ToolInput, MCPRegistry, MCPServerInfo, schemaToCompactParams } from '../src/index.js';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -59,6 +59,108 @@ describe('toolbox list', () => {
     const data = result.data as Record<string, unknown>;
     const tools = data.tools as Array<{ name: string; description: string }>;
     expect(tools[0].description).toMatch(/useful/);
+  });
+
+  it('default detail is params', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', {});
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.params).toBeDefined();
+    expect(tool.params).not.toBe('');
+  });
+
+  it('detail=names returns name and description only', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'names' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.params).toBeUndefined();
+    expect(tool.schema).toBeUndefined();
+    expect(tool.schema_md).toBeUndefined();
+    expect(tool.schema_csv).toBeUndefined();
+  });
+
+  it('detail=json includes schema field', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'json' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema).toBeDefined();
+  });
+
+  it('detail=markdown includes schema_md field', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'markdown' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema_md).toBeDefined();
+    expect(tool.schema_md).not.toBe('');
+  });
+
+  it('detail=csv includes schema_csv field', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'csv' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema_csv).toBeDefined();
+    expect(tool.schema_csv).not.toBe('');
+  });
+
+  it('detail=params explicit includes params field', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'params' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.params).toBeDefined();
+    expect(tool.params).not.toBe('');
+  });
+
+  it('invalid detail returns error', async () => {
+    const tb = new Toolbox([makeTool({ name: 'test_tool' })]);
+    const result = await tb.handle('list', { detail: 'invalid' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Invalid detail level/);
+  });
+
+  it('params for tool with empty schema is empty string', async () => {
+    const tb = new Toolbox([
+      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
+    ]);
+    const result = await tb.handle('list', {});
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.params).toBe('');
+  });
+
+  it('json for tool with empty schema is {}', async () => {
+    const tb = new Toolbox([
+      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
+    ]);
+    const result = await tb.handle('list', { detail: 'json' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema).toEqual({});
+  });
+
+  it('markdown for tool with empty schema is empty string', async () => {
+    const tb = new Toolbox([
+      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
+    ]);
+    const result = await tb.handle('list', { detail: 'markdown' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema_md).toBe('');
+  });
+
+  it('csv for tool with empty schema is empty string', async () => {
+    const tb = new Toolbox([
+      { name: 'empty', description: 'No schema', schema: {}, execute: () => ({}) },
+    ]);
+    const result = await tb.handle('list', { detail: 'csv' });
+    const data = result.data as Record<string, unknown>;
+    const tool = (data.tools as Record<string, unknown>[])[0];
+    expect(tool.schema_csv).toBe('');
   });
 });
 
@@ -564,6 +666,35 @@ describe('getToolDefinition', () => {
 // ── Schema formatting tests ───────────────────────────────────────
 
 describe('schema formatting', () => {
+  it('schemaToCompactParams returns compact param string', () => {
+    const result = schemaToCompactParams({
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        limit: { type: 'integer' },
+        offset: { type: 'integer' },
+      },
+      required: ['query'],
+    });
+    expect(result).toBe('query(string), limit(integer)?, offset(integer)?');
+  });
+
+  it('schemaToCompactParams handles empty schema', () => {
+    expect(schemaToCompactParams({})).toBe('');
+    expect(schemaToCompactParams({ type: 'object' })).toBe('');
+  });
+
+  it('schemaToCompactParams handles enums', () => {
+    const result = schemaToCompactParams({
+      type: 'object',
+      properties: {
+        role: { type: 'string', enum: ['admin', 'user'] },
+      },
+      required: ['role'],
+    });
+    expect(result).toBe('role(admin|user)');
+  });
+
   it('schemaToCsv returns compact CSV header', async () => {
     const tb = new Toolbox([], { schemaFormat: 'markdown' });
     // schemaFormat only affects explain output; schemaToCsv is separate

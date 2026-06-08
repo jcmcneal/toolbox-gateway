@@ -1,5 +1,5 @@
 {
-  "$description": "Expected response shape for toolbox list command",
+  "$description": "Expected response shapes for toolbox list command with all detail levels",
   "request": {
     "command": "list"
   },
@@ -7,19 +7,87 @@
     "success": true,
     "data": {
       "tools": [
-        {"name": "<string>", "description": "<string>"}
+        {"name": "<string>", "description": "<string>", "params": "<string>"}
       ],
       "count": "<number>"
     }
   },
+  "detail_variants": {
+    "params": {
+      "description": "Default detail level — includes compact params hint per tool",
+      "request": {"command": "list"},
+      "response_shape": {
+        "success": true,
+        "data": {
+          "tools": [
+            {"name": "<string>", "description": "<string>", "params": "<string>"}
+          ],
+          "count": "<number>"
+        }
+      }
+    },
+    "names": {
+      "description": "Original behavior — name and description only",
+      "request": {"command": "list", "detail": "names"},
+      "response_shape": {
+        "success": true,
+        "data": {
+          "tools": [
+            {"name": "<string>", "description": "<string>"}
+          ],
+          "count": "<number>"
+        }
+      }
+    },
+    "json": {
+      "description": "Full JSON Schema per tool (inline explain)",
+      "request": {"command": "list", "detail": "json"},
+      "response_shape": {
+        "success": true,
+        "data": {
+          "tools": [
+            {"name": "<string>", "description": "<string>", "schema": "<object>"}
+          ],
+          "count": "<number>"
+        }
+      }
+    },
+    "markdown": {
+      "description": "Markdown-formatted schema per tool",
+      "request": {"command": "list", "detail": "markdown"},
+      "response_shape": {
+        "success": true,
+        "data": {
+          "tools": [
+            {"name": "<string>", "description": "<string>", "schema_md": "<string>"}
+          ],
+          "count": "<number>"
+        }
+      }
+    },
+    "csv": {
+      "description": "CSV-formatted schema per tool",
+      "request": {"command": "list", "detail": "csv"},
+      "response_shape": {
+        "success": true,
+        "data": {
+          "tools": [
+            {"name": "<string>", "description": "<string>", "schema_csv": "<string>"}
+          ],
+          "count": "<number>"
+        }
+      }
+    }
+  },
   "test_cases": [
     {
-      "name": "list returns all visible tools",
+      "name": "list returns all visible tools (params default)",
       "setup": ["tool_a", "tool_b", "tool_c"],
       "assertions": {
         "success": true,
         "data.tools.length": 3,
-        "data.count": 3
+        "data.count": 3,
+        "data.tools[0].has(params)": true
       }
     },
     {
@@ -37,6 +105,57 @@
       "assertions": {
         "success": true,
         "data.tools[0].description": "non-empty string"
+      }
+    },
+    {
+      "name": "list detail=names returns name and description only",
+      "setup": ["tool_a", "tool_b"],
+      "detail": "names",
+      "assertions": {
+        "success": true,
+        "data.tools.length": 2,
+        "data.tools[0].has(params)": false,
+        "data.tools[0].has(schema)": false,
+        "data.tools[0].has(schema_md)": false,
+        "data.tools[0].has(schema_csv)": false
+      }
+    },
+    {
+      "name": "list detail=json includes schema field",
+      "setup": ["tool_a"],
+      "detail": "json",
+      "assertions": {
+        "success": true,
+        "data.tools[0].has(schema)": true
+      }
+    },
+    {
+      "name": "list detail=markdown includes schema_md field",
+      "setup": ["tool_a"],
+      "detail": "markdown",
+      "assertions": {
+        "success": true,
+        "data.tools[0].has(schema_md)": true,
+        "data.tools[0].schema_md": "non-empty string"
+      }
+    },
+    {
+      "name": "list detail=csv includes schema_csv field",
+      "setup": ["tool_a"],
+      "detail": "csv",
+      "assertions": {
+        "success": true,
+        "data.tools[0].has(schema_csv)": true,
+        "data.tools[0].schema_csv": "non-empty string"
+      }
+    },
+    {
+      "name": "list with invalid detail returns error",
+      "setup": ["tool_a"],
+      "detail": "invalid",
+      "assertions": {
+        "success": false,
+        "error": "non-empty string"
       }
     }
   ]

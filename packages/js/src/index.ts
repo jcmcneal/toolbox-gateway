@@ -9,13 +9,13 @@
 
 // ── Re-exports ──────────────────────────────────────────────────────
 
-export { schemaToCsv, schemaToMarkdown, dataToCsv } from "./schema.js";
+export { schemaToCsv, schemaToMarkdown, dataToCsv, schemaToCompactParams } from "./schema.js";
 export { SQLiteHintStore } from "./sqlite-store.js";
 export { MCPRegistry } from "./mcp.js";
 
 // ── Local imports (needed by Toolbox implementation) ────────────────────
 
-import { schemaToMarkdown as _schemaToMarkdown, dataToCsv as _dataToCsv } from "./schema.js";
+import { schemaToMarkdown as _schemaToMarkdown, dataToCsv as _dataToCsv, schemaToCsv as _schemaToCsv, schemaToCompactParams } from "./schema.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ export const TOOLBOX_SCHEMA = {
   description: `CLI-style gateway for all tools.
 
 Commands:
-- list: Show all available tools with descriptions (use mcp for MCP tools)
+- list: Show all available tools with descriptions (use mcp for MCP tools, detail for detail level)
 - explain: Get schema docs for one or more tools (provide toolNames, use mcp for MCP tools)
 - run: Execute a tool (requires toolName and subject, use mcp for MCP tools)
 - servers: List available MCP servers and their descriptions
@@ -93,6 +93,11 @@ Always provide a "subject" when using "run" to explain your intent.`,
         type: 'string',
         enum: ['list', 'explain', 'run', 'servers', 'hints'],
         description: 'list | explain | run | servers | hints',
+      },
+      detail: {
+        type: 'string',
+        enum: ['params', 'names', 'json', 'markdown', 'csv'],
+        description: 'Detail level for list command: params (default), names, json, markdown, csv',
       },
       toolNames: {
         type: 'array',
@@ -172,18 +177,57 @@ export class Toolbox {
   }
 
   private handleList(params: Record<string, unknown>): ToolResult {
+    const validDetails = ["params", "names", "json", "markdown", "csv"];
+    const detail = (params.detail as string) ?? "params";
+
+    if (params.detail !== undefined && !validDetails.includes(detail)) {
+      return { success: false, error: `Invalid detail level: ${detail}. Valid options: ${validDetails.join(", ")}` };
+    }
+
     // MCP routing: --mcp=serverId
     if (params.mcp) {
-      return this.listMcpTools(params.mcp as string);
+      return this.listMcpTools(params.mcp as string, detail);
     }
 
     const tools = Array.from(this.tools.values())
       .filter((t) => !t.isHidden)
-      .map((t) => ({ name: t.name, description: t.description }));
+      .map((t) => {
+        const entry: Record<string, unknown> = { name: t.name, description: t.description };
+        if (detail === "names") {
+          // just name + description
+        } else if (detail === "params") {
+          entry.params = schemaToCompactParams(t.schema as Record<string, unknown>);
+        } else if (detail === "json") {
+          entry.schema = t.schema;
+        } else if (detail === "markdown") {
+          const props = (t.schema as Record<string, unknown>)?.properties;
+          if (props && typeof props === 'object' && Object.keys(props).length > 0) {
+            entry.schema_md = _schemaToMarkdown(t.schema as Record<string, unknown>, {
+              title: t.name,
+              description: t.description,
+            });
+          } else {
+            entry.schema_md = "";
+          }
+        } else if (detail === "csv") {
+          const props = (t.schema as Record<string, unknown>)?.properties;
+          if (props && typeof props === 'object' && Object.keys(props).length > 0) {
+            try {
+              entry.schema_csv = _schemaToCsv(t.schema as Record<string, unknown>, t.name);
+            } catch {
+              entry.schema_csv = "";
+            }
+          } else {
+            entry.schema_csv = "";
+          }
+        }
+        return entry;
+      });
+
     return { success: true, data: { tools, count: tools.length } };
   }
 
-  private listMcpTools(serverId: string): ToolResult {
+  private listMcpTools(serverId: string, _detail: string = "params"): ToolResult {
     if (!this.mcpRegistry) {
       return { success: false, error: 'No MCP registry configured' };
     }

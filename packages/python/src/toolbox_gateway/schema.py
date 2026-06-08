@@ -2,12 +2,13 @@
 
 Opt-in: ``pip install toolbox-gateway[schema]``
 
-This module provides two key utilities:
+This module provides three key utilities:
 
 1. ``schema_to_csv`` — Convert a JSON Schema to a compact CSV header with type hints
 2. ``schema_to_markdown`` — Convert a JSON Schema to markdown field documentation
+3. ``schema_to_compact_params`` — Convert a JSON Schema to a compact param hint string
 
-Both are designed for the ``toolbox explain`` command to return compact,
+All are designed for toolbox commands (``list``, ``explain``) to return compact,
 LLM-friendly tool documentation instead of raw JSON Schema blobs.
 """
 
@@ -229,6 +230,51 @@ def schema_to_markdown(
             lines.append(line)
 
     return "\n".join(lines)
+
+
+# ── Compact Params ────────────────────────────────────────────────────
+
+def schema_to_compact_params(schema: dict[str, Any]) -> str:
+    """Convert a JSON Schema to a compact parameter hint string.
+
+    Produces output like::
+
+        "query(string), limit(integer)?, offset(integer)?"
+
+    This is the default format for the ``list`` command's ``params`` field.
+
+    Args:
+        schema: A JSON Schema dict (type: object with properties).
+
+    Returns:
+        Compact params string, or ``""`` for an empty schema.
+    """
+    resolved = _resolve_ref(schema)
+
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+
+    if resolved.get("type") == "array" and "items" in resolved:
+        properties = resolved["items"].get("properties", {})
+        required = resolved["items"].get("required", [])
+    elif resolved.get("type") == "object":
+        properties = resolved.get("properties", {})
+        required = resolved.get("required", [])
+    elif "properties" in resolved:
+        properties = resolved["properties"]
+        required = resolved.get("required", [])
+
+    if not properties:
+        return ""
+
+    parts: list[str] = []
+    for field_name, field_schema in properties.items():
+        type_hint = _get_type_hint(field_schema)
+        is_optional = field_name not in required
+        suffix = "?" if is_optional else ""
+        parts.append(f"{field_name}({type_hint}){suffix}")
+
+    return ", ".join(parts)
 
 
 # ── JSON to CSV data format ──────────────────────────────────────────
